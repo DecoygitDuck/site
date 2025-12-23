@@ -1,0 +1,4088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orby — Field HUD (Pulse Edition) — Beautiful Sphere</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+
+<!-- Modern Typography: Inter + JetBrains Mono -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+/* Modern gradient color system */
+:root{
+  /* Rich blacks with depth */
+  --bg: #000000;
+  --bg-elevated: #12121a;
+  --bg-surface: #1a1a24;
+
+  /* Glassmorphism backgrounds */
+  --panel-bg: rgba(12, 12, 20, 0.75);
+  --panel-bg-solid: rgba(18, 18, 28, 0.92);
+
+  /* Primary gradient spectrum: cyan → purple → pink */
+  --accent-cyan: #54ffd1;
+  --accent-purple: #a78bfa;
+  --accent-pink: #f472b6;
+  --accent-blue: #60a5fa;
+
+  /* Legacy support */
+  --accent: #54ffd1;
+  --accent2: #86d8ff;
+
+  /* Gradient definitions */
+  --gradient-primary: linear-gradient(135deg, #54ffd1 0%, #a78bfa 50%, #f472b6 100%);
+  --gradient-accent: linear-gradient(135deg, #54ffd1 0%, #86d8ff 100%);
+  --gradient-glow: linear-gradient(135deg, rgba(84,255,209,0.4) 0%, rgba(167,139,250,0.4) 50%, rgba(244,114,182,0.4) 100%);
+  --gradient-border: linear-gradient(135deg, rgba(84,255,209,0.6) 0%, rgba(167,139,250,0.5) 50%, rgba(244,114,182,0.4) 100%);
+
+  /* Text colors */
+  --text: #e8f4f0;
+  --text-dim: #a4c4b8;
+  --text-muted: #6b8c80;
+
+  /* Shadows & glows */
+  --glow-cyan: 0 0 20px rgba(84,255,209,0.3), 0 0 40px rgba(84,255,209,0.1);
+  --glow-purple: 0 0 20px rgba(167,139,250,0.3), 0 0 40px rgba(167,139,250,0.1);
+  --glow-multi: 0 0 20px rgba(84,255,209,0.25), 0 0 40px rgba(167,139,250,0.15), 0 0 60px rgba(244,114,182,0.1);
+
+  /* Safe areas */
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+
+  /* Animation timing */
+  --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Noise texture (SVG-based) */
+  --noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+*{box-sizing:border-box}
+html, body {
+  margin:0;
+  padding:0;
+  background:#000000;
+  overflow:hidden;
+  font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color:var(--text);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+body{ overscroll-behavior:none; touch-action:none; }
+
+/* CANVAS ----------------------------------------------------------- */
+#gameCanvas{
+  width:100vw;
+  height:100vh;
+  display:block;
+  background:#000000;
+}
+
+
+/* FIELD PULSE (visual acknowledgment for number-language) ------------ */
+#fieldPulse{
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:2;
+  opacity:0;
+  mix-blend-mode: screen;
+}
+#fieldPulse::before,
+#fieldPulse::after{
+  content:'';
+  position:absolute;
+  inset:-22%;
+  opacity:0;
+  transform:scale(0.75);
+  will-change: transform, opacity, filter;
+  border-radius: 999px;
+}
+#fieldPulse::before{
+  background: radial-gradient(circle at var(--fp-x, 50%) var(--fp-y, 50%),
+    rgba(84,255,209,0.22) 0%,
+    rgba(167,139,250,0.14) 26%,
+    rgba(244,114,182,0.08) 44%,
+    rgba(0,0,0,0) 62%);
+  filter: blur(10px);
+}
+#fieldPulse::after{
+  background: radial-gradient(circle at var(--fp-x, 50%) var(--fp-y, 50%),
+    rgba(255,255,255,0.12) 0%,
+    rgba(255,255,255,0.00) 34%,
+    rgba(0,0,0,0) 60%);
+  filter: blur(2px);
+}
+#fieldPulse.pulse::before{ animation: fieldPulseA 680ms var(--ease-out) 1; }
+#fieldPulse.pulse::after{  animation: fieldPulseB 680ms var(--ease-out) 1; }
+
+@keyframes fieldPulseA{
+  0%   { opacity:0; transform:scale(0.70); filter: blur(8px); }
+  18%  { opacity:1; }
+  100% { opacity:0; transform:scale(1.32); filter: blur(22px); }
+}
+@keyframes fieldPulseB{
+  0%   { opacity:0; transform:scale(0.74); filter: blur(2px); }
+  22%  { opacity:0.9; }
+  100% { opacity:0; transform:scale(1.26); filter: blur(10px); }
+}
+
+
+/* TERMINAL PANEL --------------------------------------------------- */
+#panel{
+  position:fixed;
+  /* Note: children need relative positioning for noise overlay */
+  top:10px;
+  left:10px;
+  width:min(92vw, 372px);
+  padding:12px 12px calc(12px + var(--safe-bottom));
+  border-radius:18px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(84,255,209,0.25);
+  box-shadow:
+    var(--glow-multi),
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    0 4px 24px rgba(0,0,0,0.4);
+  z-index:10;
+  max-height:min(56vh, 600px);
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
+  transition: all 0.3s var(--ease-out);
+}
+/* Noise texture overlay */
+#panel::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  border-radius:18px;
+  background: var(--noise);
+  opacity:0.03;
+  pointer-events:none;
+  z-index:0;
+}
+.panelHeader{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:8px;
+}
+#panel h1{
+  margin:0;
+  font-size:13px;
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing:0.12em;
+  text-transform:uppercase;
+  font-weight:700;
+}
+.headerBtns{display:flex; gap:6px; align-items:center;}
+.miniBtn{
+  padding:6px 12px;
+  font-size:12px;
+  font-weight:500;
+  line-height:1;
+  border-radius:10px;
+  border:1px solid rgba(84,255,209,0.3);
+  background: linear-gradient(135deg, rgba(84,255,209,0.12) 0%, rgba(167,139,250,0.08) 100%);
+  color:var(--text);
+  cursor:pointer;
+  transition: all 0.2s var(--ease-out);
+}
+.miniBtn:hover{
+  background: linear-gradient(135deg, rgba(84,255,209,0.2) 0%, rgba(167,139,250,0.15) 100%);
+  border-color: rgba(84,255,209,0.5);
+  box-shadow: 0 0 16px rgba(84,255,209,0.25);
+  transform: translateY(-1px);
+}
+.miniBtn:active{
+  transform: translateY(0) scale(0.98);
+}
+
+.inputRow{ margin:12px 0; }
+label{
+  font-size:10px;
+  font-weight:600;
+  letter-spacing:0.05em;
+  text-transform:uppercase;
+  color:var(--text-dim);
+  display:block;
+  margin-bottom:6px;
+}
+input{
+  width: 100%;
+  padding:10px 14px;
+  background: rgba(0,0,0,0.4);
+  border:1px solid rgba(84,255,209,0.3);
+  border-radius:12px;
+  color:var(--text);
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size:13px;
+  outline:none;
+  transition: all 0.2s var(--ease-out);
+}
+input:hover{
+  border-color: rgba(84,255,209,0.5);
+}
+input:focus{
+  border-color: rgba(84,255,209,0.7);
+  box-shadow:
+    0 0 0 3px rgba(84,255,209,0.12),
+    0 0 20px rgba(84,255,209,0.15);
+  background: rgba(0,0,0,0.5);
+}
+input::placeholder{
+  color: var(--text-muted);
+  opacity:0.6;
+}
+/* Slider styling */
+input[type="range"]{
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(84,255,209,0.15);
+  border-radius:999px;
+  height:6px;
+  padding:0;
+  border:none;
+}
+input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance: none;
+  appearance: none;
+  width:18px;
+  height:18px;
+  border-radius:999px;
+  background: var(--gradient-primary);
+  cursor:pointer;
+  box-shadow: 0 0 10px rgba(84,255,209,0.4);
+  transition: all 0.15s var(--ease-out);
+}
+input[type="range"]::-webkit-slider-thumb:hover{
+  transform: scale(1.15);
+  box-shadow: 0 0 16px rgba(84,255,209,0.5);
+}
+input[type="range"]::-moz-range-thumb{
+  width:18px;
+  height:18px;
+  border-radius:999px;
+  background: var(--gradient-primary);
+  cursor:pointer;
+  border:none;
+  box-shadow: 0 0 10px rgba(84,255,209,0.4);
+}
+/* Checkbox styling */
+input[type="checkbox"]{
+  -webkit-appearance: none;
+  appearance: none;
+  width:18px;
+  height:18px;
+  border-radius:6px;
+  border:1px solid rgba(84,255,209,0.4);
+  background: rgba(0,0,0,0.4);
+  cursor:pointer;
+  position:relative;
+  padding:0;
+}
+input[type="checkbox"]:checked{
+  background: var(--gradient-primary);
+  border-color: transparent;
+}
+input[type="checkbox"]:checked::after{
+  content:'✓';
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:12px;
+  font-weight:700;
+  color:#0a0a0f;
+}
+
+.rowBtns{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+button.btn{
+  padding:10px 16px;
+  background: var(--gradient-primary);
+  border:none;
+  border-radius:999px;
+  cursor:pointer;
+  font-size:12px;
+  font-weight:700;
+  color:#0a0a0f;
+  white-space:nowrap;
+  transition: all 0.2s var(--ease-out);
+  position:relative;
+  overflow:hidden;
+}
+button.btn::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 50%);
+  opacity:0;
+  transition: opacity 0.2s var(--ease-out);
+}
+button.btn:hover::before{
+  opacity:1;
+}
+button.btn.secondary{
+  background: linear-gradient(135deg, rgba(84,255,209,0.15) 0%, rgba(167,139,250,0.1) 100%);
+  color:var(--text);
+  border:1px solid rgba(84,255,209,0.4);
+}
+button.btn:hover{
+  box-shadow:
+    0 0 20px rgba(84,255,209,0.4),
+    0 0 40px rgba(167,139,250,0.2);
+  transform: translateY(-2px);
+}
+button.btn.secondary:hover{
+  background: linear-gradient(135deg, rgba(84,255,209,0.25) 0%, rgba(167,139,250,0.18) 100%);
+  border-color: rgba(84,255,209,0.6);
+}
+button.btn:active{
+  transform: translateY(0) scale(0.98);
+}
+
+.divider{
+  height:1px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(84,255,209,0.4) 20%,
+    rgba(167,139,250,0.5) 50%,
+    rgba(244,114,182,0.4) 80%,
+    transparent 100%
+  );
+  margin:12px 0;
+  opacity:1;
+}
+
+/* Now Playing ------------------------------------------------------ */
+.nowPlaying{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:12px;
+  border-radius:14px;
+  background: linear-gradient(135deg, rgba(84,255,209,0.08) 0%, rgba(167,139,250,0.05) 100%);
+  border:1px solid rgba(84,255,209,0.2);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+  transition: all 0.3s var(--ease-out);
+}
+.npLeft{min-width:0}
+.npTitle{
+  font-size:10px;
+  font-weight:600;
+  color: var(--text-muted);
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  margin-bottom:4px;
+}
+.npLine{
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:0.02em;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.npMeta{
+  font-size:10px;
+  opacity:0.9;
+  margin-top:4px;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.pulseWrap{
+  width:52px;
+  height:52px;
+  border-radius:16px;
+  display:grid;
+  place-items:center;
+  border:1px solid rgba(167,139,250,0.25);
+  background: radial-gradient(circle at center, rgba(167,139,250,0.1) 0%, rgba(0,0,0,0.3) 100%);
+  transition: all 0.3s var(--ease-out);
+}
+#pulseDot{
+  width:14px;
+  height:14px;
+  border-radius:999px;
+  background: var(--gradient-primary);
+  box-shadow:
+    0 0 20px rgba(84,255,209,0.4),
+    0 0 40px rgba(167,139,250,0.25),
+    0 0 60px rgba(244,114,182,0.15);
+  transform:scale(1);
+  transition: transform 0.1s var(--ease-out);
+}
+
+/* Presets ---------------------------------------------------------- */
+.presetRow{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:10px;
+}
+.preset{
+  padding:8px 14px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:600;
+  border:1px solid rgba(167,139,250,0.3);
+  background: linear-gradient(135deg, rgba(167,139,250,0.1) 0%, rgba(96,165,250,0.08) 100%);
+  color:var(--text);
+  cursor:pointer;
+  transition: all 0.2s var(--ease-out);
+}
+.preset:hover{
+  background: linear-gradient(135deg, rgba(167,139,250,0.2) 0%, rgba(96,165,250,0.15) 100%);
+  border-color: rgba(167,139,250,0.5);
+  box-shadow: 0 0 16px rgba(167,139,250,0.25);
+  transform: translateY(-1px);
+}
+.preset:active{
+  transform: translateY(0) scale(0.98);
+}
+
+
+/* Segmented preset control (modern, compact, clearer state) */
+.presetRow.segmented{
+  gap:0;
+  padding:4px;
+  border-radius:999px;
+  border:1px solid rgba(84,255,209,0.18);
+  background: rgba(10,10,16,0.38);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+  align-items:stretch;
+}
+.presetRow.segmented .preset{
+  border-radius:999px;
+  border:0;
+  background: transparent;
+  box-shadow:none;
+  padding:8px 12px;
+}
+.presetRow.segmented .preset:hover{
+  transform:none;
+  box-shadow:none;
+  border-color:transparent;
+  background: rgba(96,165,250,0.10);
+}
+.presetRow.segmented .preset.active,
+.presetRow.segmented .preset[aria-pressed="true"]{
+  background: linear-gradient(135deg, rgba(84,255,209,0.16) 0%, rgba(167,139,250,0.10) 55%, rgba(96,165,250,0.10) 100%);
+  box-shadow: 0 0 18px rgba(84,255,209,0.12);
+}
+.presetRow.segmented .preset:focus-visible{
+  outline:2px solid rgba(84,255,209,0.45);
+  outline-offset:2px;
+}
+/* Help ------------------------------------------------------------- */
+#helpPanel{
+  display:none;
+  margin-top:10px;
+  padding:12px;
+  border-radius:14px;
+  background: linear-gradient(135deg, rgba(96,165,250,0.08) 0%, rgba(167,139,250,0.06) 100%);
+  border:1px solid rgba(96,165,250,0.2);
+  font-size:11px;
+  line-height:1.5;
+  color:var(--text);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+#helpPanel code{
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size:11px;
+  color:#d8fff3;
+}
+.smallHint{
+  font-size:11px;
+  line-height:1.5;
+  color: var(--text-dim);
+  margin-top:6px;
+  margin-bottom:8px;
+}
+.smallHint b{
+  color: var(--accent-cyan);
+  font-weight:600;
+}
+
+/* Collapsed panel mode (icon only) */
+#panel.collapsed{
+  width:56px;
+  height:56px;
+  padding:8px;
+  overflow:hidden;
+}
+#panel.collapsed *:not(#togglePanelBtn){ display:none !important; }
+#panel.collapsed #togglePanelBtn{ display:block !important; width:40px; height:40px; border-radius:14px; }
+
+/* OVERLAY ---------------------------------------------------------- */
+#overlayMsg{
+  position:fixed;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  font-size:13px;
+  font-weight:500;
+  color:var(--text);
+  background: rgba(12, 12, 20, 0.85);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  padding:16px 24px;
+  border-radius:16px;
+  border:1px solid rgba(84,255,209,0.3);
+  opacity:0.98;
+  pointer-events:none;
+  z-index:9;
+  text-align:center;
+  max-width: 92vw;
+  box-shadow:
+    var(--glow-multi),
+    0 8px 32px rgba(0,0,0,0.5);
+}
+
+/* TOUCH CONTROLS --------------------------------------------------- */
+#touchControls{
+  position:fixed;
+  left:0; right:0;
+  bottom:0;
+  padding:12px;
+  padding-bottom: calc(12px + var(--safe-bottom));
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  z-index:12;
+  pointer-events:none;
+}
+.tcPad{
+  pointer-events:auto;
+  background: rgba(12, 12, 20, 0.7);
+  border:1px solid rgba(84,255,209,0.25);
+  border-radius:20px;
+  box-shadow:
+    0 0 30px rgba(84,255,209,0.15),
+    0 0 60px rgba(167,139,250,0.08),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  transition: all 0.3s var(--ease-out);
+}
+#joyWrap{
+  width: 170px;
+  height: 170px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+}
+#joyBase{
+  width: 140px; height: 140px;
+  border-radius: 999px;
+  border: 1px solid rgba(167,139,250,0.3);
+  background: radial-gradient(circle at center, rgba(167,139,250,0.08) 0%, rgba(0,0,0,0.3) 100%);
+}
+#joyKnob{
+  position:absolute;
+  width: 58px; height: 58px;
+  border-radius: 999px;
+  border: 1px solid rgba(84,255,209,0.6);
+  background: linear-gradient(135deg, rgba(84,255,209,0.25) 0%, rgba(167,139,250,0.18) 100%);
+  transform: translate(0px,0px);
+  box-shadow:
+    0 0 20px rgba(84,255,209,0.25),
+    inset 0 1px 0 rgba(255,255,255,0.1);
+  transition: box-shadow 0.15s var(--ease-out);
+}
+#joyKnob:active{
+  box-shadow:
+    0 0 30px rgba(84,255,209,0.4),
+    0 0 50px rgba(167,139,250,0.2),
+    inset 0 1px 0 rgba(255,255,255,0.1);
+}
+
+.tcHdr{
+  grid-column: 1 / -1;
+  padding: 6px 10px 2px;
+  font: 11px/1 'Inter', system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.65);
+  opacity: 0.9;
+}
+.tcBtn{
+  padding:12px 12px;
+  border-radius: 999px;
+  border:none;
+  background: var(--gradient-primary);
+  color:#0a0a0f;
+  font: 12px/1 'Inter', system-ui, sans-serif;
+  font-weight: 700;
+  user-select:none;
+  -webkit-user-select:none;
+  touch-action:none;
+  transition: all 0.15s var(--ease-out);
+}
+.tcBtn.secondary{
+  background: linear-gradient(135deg, rgba(84,255,209,0.18) 0%, rgba(167,139,250,0.12) 100%);
+  color:var(--text);
+  border:1px solid rgba(84,255,209,0.4);
+}
+.tcBtn:active{
+  transform: scale(0.95);
+  box-shadow: 0 0 20px rgba(84,255,209,0.4);
+}
+
+@media (min-width: 820px){
+  #touchControls{ opacity:0.35; }
+  #touchControls:hover{ opacity:1; }
+}
+
+/* Gradient border animation */
+@keyframes borderShimmer {
+  0% { border-color: rgba(84,255,209,0.4); }
+  33% { border-color: rgba(167,139,250,0.4); }
+  66% { border-color: rgba(244,114,182,0.4); }
+  100% { border-color: rgba(84,255,209,0.4); }
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 20px rgba(84,255,209,0.3),
+      0 0 40px rgba(167,139,250,0.15),
+      0 0 60px rgba(244,114,182,0.08),
+      inset 0 1px 0 rgba(255,255,255,0.05),
+      0 4px 24px rgba(0,0,0,0.4);
+  }
+  50% {
+    box-shadow:
+      0 0 30px rgba(84,255,209,0.4),
+      0 0 50px rgba(167,139,250,0.25),
+      0 0 70px rgba(244,114,182,0.12),
+      inset 0 1px 0 rgba(255,255,255,0.08),
+      0 4px 24px rgba(0,0,0,0.4);
+  }
+}
+
+/* Movement reactive HUD */
+#panel.moving{
+  animation: borderShimmer 3s ease-in-out infinite, glowPulse 2s ease-in-out infinite;
+}
+#panel.moving #pulseDot{
+  box-shadow:
+    0 0 25px rgba(84,255,209,0.5),
+    0 0 50px rgba(167,139,250,0.35),
+    0 0 75px rgba(244,114,182,0.2);
+}
+@keyframes hudBreath { 0%,100%{ filter:brightness(1);} 50%{ filter:brightness(1.12);} }
+#panel.moving .nowPlaying{ animation: hudBreath 1.6s ease-in-out infinite; }
+
+/* Pulse dot morphing animation */
+@keyframes pulseMorph {
+  0%, 100% {
+    border-radius: 50%;
+    transform: scale(1);
+  }
+  25% {
+    border-radius: 45% 55% 50% 50%;
+    transform: scale(1.05);
+  }
+  50% {
+    border-radius: 50% 50% 55% 45%;
+    transform: scale(1.1);
+  }
+  75% {
+    border-radius: 55% 45% 50% 50%;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow:
+      0 0 20px rgba(84,255,209,0.4),
+      0 0 40px rgba(167,139,250,0.25),
+      0 0 60px rgba(244,114,182,0.15);
+  }
+  50% {
+    box-shadow:
+      0 0 30px rgba(84,255,209,0.5),
+      0 0 50px rgba(167,139,250,0.35),
+      0 0 80px rgba(244,114,182,0.25);
+  }
+}
+
+#panel.moving #pulseDot{
+  animation: pulseMorph 2s ease-in-out infinite, pulseGlow 1.5s ease-in-out infinite;
+}
+
+
+/* --- UI TOGGLES (v13) ----------------------------------------------- */
+.isHidden{ display:none !important; }
+/* Full-hide HUD panel -> show dock instead */
+#panel.uiHidden{ display:none !important; }
+/* Minimal dock when HUD is hidden (so you can bring it back) */
+#uiDock{
+  position:fixed;
+  top:10px;
+  left:10px;
+  z-index:13;
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+#uiDock .dockBtn{
+  min-width:72px;
+  height:44px;
+  padding:0 14px;
+  border-radius:14px;
+  border:1px solid rgba(191,255,232,0.35);
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(12px) saturate(170%);
+  -webkit-backdrop-filter: blur(12px) saturate(170%);
+  color:rgba(232,244,240,0.95);
+  font-size:14px;
+  font-weight:800;
+  cursor:pointer;
+  box-shadow: 0 0 16px rgba(84,255,209,0.14);
+  transition: transform 0.18s var(--ease-out), border-color 0.18s var(--ease-out), box-shadow 0.18s var(--ease-out);
+}
+#uiDock .dockBtn:hover{
+  transform: translateY(-1px);
+  border-color: rgba(191,255,232,0.55);
+  box-shadow: 0 0 22px rgba(84,255,209,0.18);
+}
+#uiDock .dockBtn:active{ transform: translateY(0) scale(0.98); }
+
+
+/* v15: touch/composer removed from UI (logic retained) */
+#composerPanel, #touchControls, .touchControls { display:none !important; }
+
+/* ====================================================================
+   UI POLISH OVERRIDES (v16) — visual only, gameplay unchanged
+   Goals:
+   - Reduce "ghostly white" + bloom in HUD
+   - Keep Orby/field effects as primary glow
+   - Make HUD feel lighter + more passive when idle
+==================================================================== */
+
+/* Slightly calmer panel material + less white */
+:root{
+  --panel-bg: rgba(10, 10, 16, 0.68);
+  --panel-bg-solid: rgba(14, 14, 22, 0.88);
+
+  /* Softer UI borders (tinted, not white) */
+  --ui-border: rgba(84,255,209,0.16);
+  --ui-border-strong: rgba(84,255,209,0.28);
+
+  /* Reduce multi-bloom used by UI surfaces */
+  --glow-multi: 0 0 14px rgba(84,255,209,0.12), 0 0 24px rgba(167,139,250,0.08), 0 0 34px rgba(244,114,182,0.06);
+}
+
+/* Field pulse: remove harsh white center that reads "ghostly" */
+#fieldPulse{
+  mix-blend-mode: screen;
+  opacity: 0; /* unchanged behavior; animation drives it */
+}
+#fieldPulse::after{
+  background: radial-gradient(circle at var(--fp-x, 50%) var(--fp-y, 50%),
+    rgba(200,240,255,0.06) 0%,
+    rgba(200,240,255,0.00) 36%,
+    rgba(0,0,0,0) 64%);
+  filter: blur(4px);
+}
+
+/* Panel: less glow, more clarity. No "aura" unless moving */
+#panel{
+  border: 1px solid var(--ui-border);
+  background: var(--panel-bg);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  box-shadow:
+    0 10px 34px rgba(0,0,0,0.55),
+    inset 0 1px 0 rgba(200,240,255,0.03);
+  transition: transform 0.26s var(--ease-out), opacity 0.26s var(--ease-out), border-color 0.26s var(--ease-out), box-shadow 0.26s var(--ease-out);
+}
+
+/* Noise: keep it, but reduce fog */
+#panel::before{ opacity: 0.02; }
+
+/* Passive state: HUD feels like a visitor */
+#panel:not(:hover):not(.moving){
+  opacity: 0.92;
+}
+/* Idle UI: fades a bit when you haven't touched controls (no gameplay impact) */
+#panel.idle:not(:hover){
+  opacity: 0.78;
+}
+#panel.idle:not(:hover) .nowPlaying{
+  opacity: 0.88;
+}
+
+
+/* Active state: hover gives definition, not bloom */
+#panel:hover{
+  opacity: 0.98;
+  border-color: var(--ui-border-strong);
+  transform: translateY(-1px);
+  box-shadow:
+    0 14px 44px rgba(0,0,0,0.6),
+    0 0 18px rgba(84,255,209,0.10),
+    inset 0 1px 0 rgba(200,240,255,0.04);
+}
+
+/* Moving state: keep it special, but toned down */
+#panel.moving{
+  animation: none !important;
+  border-color: rgba(167,139,250,0.26);
+  box-shadow:
+    0 16px 48px rgba(0,0,0,0.62),
+    0 0 20px rgba(84,255,209,0.14),
+    0 0 28px rgba(167,139,250,0.10),
+    inset 0 1px 0 rgba(200,240,255,0.05);
+}
+
+/* Now Playing card: cleaner edge, less glow */
+.nowPlaying{
+  border: 1px solid rgba(84,255,209,0.14);
+  background: linear-gradient(135deg, rgba(84,255,209,0.06) 0%, rgba(167,139,250,0.04) 100%);
+  box-shadow: inset 0 1px 0 rgba(200,240,255,0.02);
+}
+
+/* Keep pulse as hero accent (still glowy, but less "UI bloom") */
+#pulseDot{
+  box-shadow:
+    0 0 18px rgba(84,255,209,0.30),
+    0 0 30px rgba(167,139,250,0.18),
+    0 0 44px rgba(244,114,182,0.10);
+}
+#panel.moving #pulseDot{
+  animation: pulseMorph 2s ease-in-out infinite, pulseGlow 1.5s ease-in-out infinite;
+}
+
+/* Mini buttons: reduce always-on glow; glow only on hover */
+.miniBtn{
+  border: 1px solid rgba(84,255,209,0.20);
+  background: linear-gradient(135deg, rgba(84,255,209,0.10) 0%, rgba(167,139,250,0.06) 100%);
+}
+.miniBtn:hover{
+  box-shadow: 0 0 14px rgba(84,255,209,0.16);
+}
+
+/* Primary buttons: slightly less specular white */
+button.btn::before{
+  background: linear-gradient(135deg, rgba(200,240,255,0.14) 0%, transparent 55%);
+}
+
+/* Overlay message: reduce HUD glow so Orby stays dominant */
+#overlayMsg{
+  border-color: rgba(84,255,209,0.18);
+  box-shadow:
+    0 10px 40px rgba(0,0,0,0.62),
+    0 0 16px rgba(84,255,209,0.10);
+}
+
+/* Dock buttons: small, clean, no fog */
+#uiDock .dockBtn{
+  border-color: rgba(84,255,209,0.18);
+  box-shadow: 0 0 14px rgba(84,255,209,0.10);
+}
+#uiDock .dockBtn:hover{
+  box-shadow: 0 0 18px rgba(84,255,209,0.14);
+}
+
+
+@media (prefers-reduced-motion: reduce){
+  *{ animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important; scroll-behavior:auto !important; }
+}
+
+
+/* --------------------------------------------------------------------
+   START SCREEN
+-------------------------------------------------------------------- */
+#startScreen{
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(1200px 700px at 50% 70%, rgba(160,210,255,0.12), rgba(0,0,0,0) 60%),
+    radial-gradient(900px 520px at 30% 35%, rgba(190,140,255,0.10), rgba(0,0,0,0) 55%),
+    rgba(0,0,0,0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: opacity 260ms ease;
+}
+#startScreen .startInner{
+  width: min(760px, 92vw);
+  border-radius: 18px;
+  padding: 24px 22px;
+  background: rgba(10,10,12,0.55);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow:
+    0 18px 60px rgba(0,0,0,0.55),
+    0 0 0 1px rgba(255,255,255,0.04) inset;
+}
+
+#startOrbWrap{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  margin: 26px 0 36px;
+}
+#startOrb{
+  width: min(480px, 82vw);
+  height: min(480px, 82vw);
+  display:block;
+  animation: titleOrbPulseSoft 3.2s ease-in-out infinite;
+  filter:
+    drop-shadow(0 0 36px rgba(84,255,209,0.40))
+    drop-shadow(0 0 72px rgba(167,139,250,0.30))
+    drop-shadow(0 0 120px rgba(244,114,182,0.18));
+}
+
+#startScreen .startTitle{
+  text-align: center;
+  font-weight: 900;
+  letter-spacing: 0.34em;
+  font-size: clamp(72px, 12vw, 160px);
+  margin-bottom: 18px;
+  text-transform: uppercase;
+  background: radial-gradient(circle at 50% 45%,
+    rgba(255,255,255,0.95) 0%,
+    rgba(180,255,235,0.95) 22%,
+    rgba(120,230,255,0.9) 42%,
+    rgba(167,139,250,0.85) 62%,
+    rgba(84,255,209,0.75) 78%,
+    rgba(84,255,209,0.55) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow:
+    0 0 28px rgba(84,255,209,0.45),
+    0 0 64px rgba(167,139,250,0.35),
+    0 0 120px rgba(244,114,182,0.22);
+}
+#startScreen .startSubtitle{
+  font-size: clamp(14px, 2.4vw, 18px);
+  opacity: 0.92;
+  line-height: 1.4;
+  margin-bottom: 14px;
+}
+#startScreen .startHint{
+  font-size: 13px;
+  opacity: 0.72;
+  line-height: 1.5;
+}
+#startScreen .keycap{
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  transform: translateY(-1px);
+}
+#startScreen .startPulse{
+  margin-top: 14px;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(120,190,255,0.0), rgba(120,190,255,0.35), rgba(210,150,255,0.28), rgba(120,190,255,0.0));
+  filter: blur(0.2px);
+  opacity: 0.85;
+  animation: startPulse 2.2s ease-in-out infinite;
+}
+@keyframes startPulse{
+  0%,100%{ transform: scaleX(0.92); opacity: 0.55; }
+  50%{ transform: scaleX(1.02); opacity: 0.95; }
+}
+
+
+/* --- START TITLE REFINEMENT --- */
+#startScreen .startTitle{
+  text-align: center;
+  font-weight: 900;
+  letter-spacing: 0.34em;
+  font-size: clamp(72px, 12vw, 160px);
+  margin-bottom: 18px;
+  text-transform: uppercase;
+  background: radial-gradient(circle at 50% 45%,
+    rgba(255,255,255,0.95) 0%,
+    rgba(180,255,235,0.95) 22%,
+    rgba(120,230,255,0.9) 42%,
+    rgba(167,139,250,0.85) 62%,
+    rgba(84,255,209,0.75) 78%,
+    rgba(84,255,209,0.55) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow:
+    0 0 28px rgba(84,255,209,0.45),
+    0 0 64px rgba(167,139,250,0.35),
+    0 0 120px rgba(244,114,182,0.22);
+}
+
+
+/* Start button (clean, subtle) */
+#startScreen .startBtn{
+  margin-top: 16px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(84,255,209,0.26);
+  background: linear-gradient(135deg, rgba(84,255,209,0.18) 0%, rgba(167,139,250,0.12) 55%, rgba(244,114,182,0.10) 100%);
+  color: rgba(232,244,240,0.98);
+  font: 13px/1 'Inter', system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 12px 46px rgba(0,0,0,0.46), 0 0 18px rgba(84,255,209,0.10);
+  transition: transform 160ms var(--ease-out), box-shadow 160ms var(--ease-out), border-color 160ms var(--ease-out), opacity 160ms var(--ease-out);
+}
+#startScreen .startBtn:hover{
+  transform: translateY(-1px);
+  border-color: rgba(84,255,209,0.40);
+  box-shadow: 0 14px 56px rgba(0,0,0,0.52), 0 0 22px rgba(84,255,209,0.14);
+}
+#startScreen .startBtn:active{
+  transform: translateY(0) scale(0.985);
+  opacity: 0.96;
+}
+
+</style>
+</head>
+
+<body>
+<canvas id="gameCanvas"></canvas>
+
+<div id="fieldPulse" aria-hidden="true"></div>
+
+
+<div id="uiDock" class="isHidden" aria-hidden="true">
+  <button class="dockBtn" id="dockShowUI" title="Show HUD (M)">Menu</button>
+  <button class="dockBtn" id="dockToggleHelp" title="Toggle Help (?)">?</button>
+</div>
+
+
+<div id="panel">
+  <div class="panelHeader">
+    <h1>Orby Field HUD</h1>
+    <div class="headerBtns">
+      <button id="helpBtn" class="miniBtn" aria-label="Toggle help">?</button>
+      <button id="togglePanelBtn" class="miniBtn" aria-label="Toggle terminal panel">☰</button>
+        <button id="hideUiBtn" class="miniBtn" aria-label="Hide HUD">✕</button>
+    </div>
+  </div>
+
+  <div class="nowPlaying" aria-label="Now playing">
+    <div class="npLeft">
+      <div class="npTitle">Field State</div>
+      <div class="npLine" id="nowPlayingLine">Triad • Groove • Shimmer</div>
+      <div class="npMeta">
+        BPM <span id="bpmReadout">96</span> • Root <span id="rootReadout">A</span> •
+        <span id="movingReadout">Still</span> • SPD <span id="spdReadout">1.00×</span>
+      </div>
+    </div>
+    <div class="pulseWrap" aria-label="Pulse">
+      <div id="pulseDot" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="presetRow segmented" role="tablist" aria-label="Presets">
+    <button class="preset" type="button" aria-pressed="false" data-preset="drift">Drift</button>
+    <button class="preset" type="button" aria-pressed="false" data-preset="ritual">Ritual</button>
+    <button class="preset" type="button" aria-pressed="false" data-preset="night">Night Walk</button>
+    <button class="preset" type="button" aria-pressed="false" data-preset="flight">Flight</button>
+  </div>
+
+  <div class="divider"></div>
+
+
+  <!-- BPM CONTROL -------------------------------------------------- -->
+  <div class="inputRow">
+    <label>BPM</label>
+    <div class="smallHint">Set a custom tempo. Turn <b>Lock</b> on to prevent presets / Drift / Composer from changing tempo.</div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <input id="bpmInput" inputmode="numeric" placeholder="96" style="flex:1; min-width:0;">
+      <button class="btn secondary" id="bpmTapBtn" title="Tap to set BPM (4+ taps)">Tap</button>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center; margin-top:8px;">
+      <input id="bpmSlider" type="range" min="40" max="200" value="96" style="flex:1;">
+      <label style="margin:0; display:flex; gap:6px; align-items:center;">
+        <input id="bpmLock" type="checkbox" style="width:auto; margin:0;">
+        <span style="font-size:11px; color:rgba(191,255,232,0.95);">Lock</span>
+      </label>
+    </div>
+  </div>
+
+  
+  <!-- FIELD (replaces seed as the primary concept) -->
+  <div class="inputRow">
+    <label>Field</label>
+    <div class="smallHint">This isn’t a song editor — it’s a living field. <b>Drift</b> reshapes the world. <b>Anchor</b> calms it.</div>
+    <div class="rowBtns">
+      <button class="btn" id="driftBtn" title="Gently reshapes harmony/rhythm/texture + flow path">Drift</button>
+      <button class="btn secondary" id="anchorBtn" title="Breath reset + soft pad bloom">Anchor</button>
+      <button class="btn secondary" id="revealComposerBtn" title="Show/Hide advanced composer">Composer</button>
+    </div>
+    <input id="seedInput" inputmode="numeric" placeholder="(hidden) e.g. 123456" style="display:none">
+  </div>
+
+  <!-- ADVANCED COMPOSER (optional) -->
+  <div id="composerPanel" style="display:none">
+    <div class="divider"></div>
+    <div class="inputRow">
+      <label>Composer (Advanced)</label>
+      <input id="patternInput" placeholder="e.g. 100 130 170 ... 210 250">
+      <div class="rowBtns">
+        <button class="btn secondary" id="bloomBtn" title="Bloom a chord from digits (safe scale)">Bloom</button>
+        <button class="btn" id="playSongBtn">Run</button>
+        <button class="btn secondary" id="stopSongBtn">Stop</button>
+      </div>
+      <div class="smallHint">Cells are gestures. Movement performs notes. Composer only nudges mood/energy.</div>
+    </div>
+
+    <div id="songStatus" class="smallHint">Song: idle</div>
+  </div>
+<div id="helpPanel">
+  <b>Quick keys</b><br>
+  • Move: <code>Arrow keys</code> / <code>WASD</code> → melody (scale-locked, speed-sensitive)<br>
+  • Drums: <code>Space</code> (tap) • hold = hat roll (velocity-aware)<br>
+  • Boom: <code>B</code> (movement drum accent)<br>
+  • Heartbeat: <code>H</code> (continuous BPM pulse bed)<br>
+  • Flow: <code>F</code> (autopilot field motion)<br>
+  • HUD: <code>M</code> (show / hide interface) • Help: <code>/</code><br>
+  • Numbers: <code>1–3</code> harmony • <code>4–6</code> rhythm • <code>7–9</code> texture • <code>0</code> anchor / breath<br><br>
+
+  <b>Clone (Dual‑Field Mode)</b><br>
+  • Toggle clone: <code>C</code><br>
+  • Original orb: <code>Arrow keys</code><br>
+  • Clone orb: <code>WASD</code><br>
+  • Both orbs influence the field independently (polyphony + counter‑motion)<br>
+  • Press <code>C</code> again to merge the clone back into the original (fusion sound)<br><br>
+
+  <b>Intro soundtrack</b><br>
+  • Start screen: soundtrack begins once audio is unlocked (first tap / click / key).<br>
+  • Press <code>Enter</code> (or <b>Start</b>) to begin — soundtrack stops.<br>
+  • In‑game: <code>Enter</code> toggles soundtrack play / pause (does not reopen start screen).<br><br>
+
+  <b>BPM + tempo control</b><br>
+  • Set BPM via input box, slider, or <b>Tap</b> button<br>
+  • <b>Lock</b> prevents presets, Drift, and Composer from changing tempo<br>
+  • <code>Shift</code> + <code>↑ / ↓</code> = fine BPM nudging<br><br>
+
+  <b>Field language</b><br>
+  Low numbers ground. Mid numbers move. High numbers dissolve.<br>
+  <b>Drift</b> reshapes the world. <b>Anchor</b> calms it again.<br><br>
+
+  <b>Composer</b> (optional / advanced)<br>
+  Use 3‑digit cells <code>abc</code>, split sections with <code>...</code><br>
+  <code>a</code> = pull (home → tension) • <code>b</code> = richness • <code>c</code> = energy<br><br>
+
+  <b>If you don’t hear sound</b><br>
+  Most browsers require a user gesture to start audio.<br>
+  Click / tap once, then press <code>Enter</code> (in‑game) to toggle the soundtrack.
+
+  <b>Quick keys</b><br>
+  • Move: <code>Arrow keys</code> / <code>WASD</code> → melody (scale-locked)<br>
+  • Drums: <code>Space</code> (tap) • hold = hat roll<br>
+  • Boom: <code>B</code> (movement drum) • Heartbeat: <code>H</code> (BPM bed)<br>
+  • Flow: <code>F</code> (autopilot) • HUD: <code>M</code> (show/hide) • Help: <code>/</code><br>
+  • Numbers: <code>1–3</code> harmony • <code>4–6</code> rhythm • <code>7–9</code> texture • <code>0</code> anchor (breath)<br><br>
+
+  <b>Intro soundtrack</b><br>
+  • Start screen: intro soundtrack begins as soon as audio is unlocked (first tap/click/key).<br>
+  • Press <code>Enter</code> (or <b>Start</b>) to begin — intro soundtrack stops.<br>
+  • In-game: <code>Enter</code> toggles intro soundtrack <b>play/pause</b> (does not reopen the start screen).<br><br>
+
+  <b>BPM + tempo control</b><br>
+  • Set BPM in the box / slider / <b>Tap</b> button<br>
+  • <b>Lock</b> prevents presets/Drift/Composer from changing BPM<br>
+  • <code>Shift</code> + <code>↑/↓</code> nudges BPM (fine adjustment)<br><br>
+
+  <b>Field language</b><br>
+  Low numbers ground. Mid numbers move. High numbers dissolve.<br>
+  <b>Drift</b> reshapes the world. <b>Anchor</b> calms it again.<br><br>
+
+  <b>Composer</b> (optional)<br>
+  Use 3-digit cells <code>abc</code>, split sections with <code>...</code><br>
+  <code>a</code> = pull (home→tension) • <code>b</code> = richness • <code>c</code> = energy<br><br>
+
+  <b>If you don’t hear sound</b><br>
+  Most browsers require a user gesture to start audio. Click/tap once, then try <code>Enter</code> (in-game) to toggle the intro soundtrack.
+</div>
+
+</div>
+
+
+<div id="startScreen" aria-label="Start screen">
+  <div class="startInner">
+    <div class="startTitle">ORBY</div>
+    <div id="startOrbWrap" aria-hidden="true"><canvas id="startOrb"></canvas></div>
+    <div class="startSubtitle">Press <span class="keycap">Enter</span> to start the experience.</div>
+    <div class="startHint">Press <span class="keycap">0</span> to breathe / silence the field.</div>
+    <button class="startBtn" id="startBtn" type="button" aria-label="Start">Start</button>
+    <div class="startHint">Move: Arrow keys / WASD • Space: drums • B: boom • H: heartbeat • M: menu • /: help</div>
+    <div class="startPulse" aria-hidden="true"></div>
+  </div>
+</div>
+
+<div id="overlayMsg">
+  Tap once to unlock audio (mobile).<br>
+  Move → melody. Numbers → reshape. Space → drums.
+</div>
+
+<div id="touchControls" aria-label="Touch controls">
+  <div id="joyWrap" class="tcPad" aria-label="Movement joystick">
+    <div id="joyBase" aria-hidden="true"></div>
+    <div id="joyKnob" aria-hidden="true"></div>
+  </div>
+
+  <div id="btnGrid" class="tcPad" aria-label="Instrument controls">
+    <div class="tcHdr">HITS</div>
+    <button class="tcBtn" id="tcDrum">DRUM</button>
+    <button class="tcBtn" id="tcKick">KICK</button>
+    <button class="tcBtn" id="tcSnare">SNARE</button>
+    <button class="tcBtn" id="tcHat">HAT</button>
+    <button class="tcBtn" id="tcBeep">BEEP</button>
+
+    <div class="tcHdr">BEDS</div>
+    <button class="tcBtn secondary" id="tcAuto">AUTO</button>
+    <button class="tcBtn secondary" id="tcBoom">BOOM</button>
+    <button class="tcBtn secondary" id="tcClick">CLICK</button>
+
+    <div class="tcHdr">FIELD</div>
+    <button class="tcBtn secondary" id="tcFlow">FLOW</button>
+    <button class="tcBtn secondary" id="tcBreath">BREATH</button>
+    <button class="tcBtn secondary" id="tcPanel">PANEL</button>
+
+    
+    <div class="tcHdr">SPEED</div>
+    <button class="tcBtn secondary" id="tcSpdDown">SPD-</button>
+    <button class="tcBtn secondary" id="tcSpdUp">SPD+</button>
+<div class="tcHdr">MODES</div>
+    <button class="tcBtn secondary" id="tcH">H+</button>
+    <button class="tcBtn secondary" id="tcR">R+</button>
+    <button class="tcBtn secondary" id="tcT">T+</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// --- MENU AUTO-HIDE AFTER START ---
+let __menuAutoHideTimer = null;
+function scheduleMenuAutoHide(){
+  clearTimeout(__menuAutoHideTimer);
+  __menuAutoHideTimer = setTimeout(() => {
+    panel.classList.add("uiHidden");
+    uiDock.classList.remove("isHidden");
+  }, 5000);
+}
+
+
+/* --------------------------------------------------------------------
+   UTILITIES
+-------------------------------------------------------------------- */
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function makeSaturationCurve(amount = 0.6){
+  const n = 44100;
+  const curve = new Float32Array(n);
+  const k = 1 + amount * 20;
+  const denom = Math.tanh(k);
+  for (let i = 0; i < n; i++){
+    const x = (i * 2) / (n - 1) - 1;
+    curve[i] = Math.tanh(k * x) / denom;
+  }
+  return curve;
+}
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+function lerp(a,b,t){ return a + (b-a)*t; }
+function smoothstep(edge0, edge1, x){
+  const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+// Lightweight static noise texture for "plasma grain"
+const __orbyNoise = (() => {
+  const c = document.createElement("canvas");
+  c.width = 160; c.height = 160;
+  const g = c.getContext("2d", { alpha:true });
+  const img = g.createImageData(c.width, c.height);
+  for (let i=0;i<img.data.length;i+=4){
+    const v = (Math.random()*255)|0;
+    img.data[i] = v; img.data[i+1] = v; img.data[i+2] = v;
+    img.data[i+3] = (Math.random()*70)|0; // low alpha
+  }
+  g.putImageData(img,0,0);
+  return c;
+})();
+
+// "True-to-app" Orby: volumetric plasma sphere (halo + rim + core + swirl + grain + specular)
+function drawOrby(ctx, x, y, r, t, speedFactor, zoneY, pulse, ambientActive, stillnessDuration, orbRGB){
+  const [orbR, orbG, orbB] = orbRGB;
+
+  // VISUAL-ONLY micro "breath" so the orb feels alive (does not affect physics/input)
+  const breath = 1 + 0.018*Math.sin(t*1.25) + 0.010*Math.sin(t*0.62 + 1.7);
+  const rd = r * breath;
+
+  // Subtle drift in highlight to feel alive (keeps ONE true white highlight)
+  const drift = 0.4 + 0.6 * Math.sin(t*0.9);
+  const hx = x + rd * (0.22 + 0.08*drift);
+  const hy = y - rd * (0.18 + 0.06*Math.cos(t*0.7));
+
+  // ------------------------------------------------------------------
+  // OUTER AURA (push glow outward; keep core crisp)
+  // ------------------------------------------------------------------
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+
+  // Move bloom outward (inner glow starts near the rim, not the center)
+  const auraR = rd * (1.75 + 0.30*(pulse-1) + 0.20*speedFactor);
+  const aura = ctx.createRadialGradient(x, y, rd*0.92, x, y, auraR);
+  aura.addColorStop(0.0, `rgba(${orbR},${orbG},${orbB},0.0)`);
+  aura.addColorStop(0.10, `rgba(${orbR},${orbG},${orbB},${0.14 + 0.07*speedFactor})`);
+  aura.addColorStop(0.42, `rgba(${Math.min(255,orbR+30)},${Math.min(255,orbG+30)},${Math.min(255,orbB+30)},${0.08 + 0.05*speedFactor})`);
+  aura.addColorStop(1.0, "rgba(0,0,0,0)");
+  ctx.fillStyle = aura;
+  ctx.beginPath(); ctx.arc(x,y,auraR,0,Math.PI*2); ctx.fill();
+
+  // Ambient "breath ring" when stillness drone is active (kept subtle)
+  if (ambientActive){
+    const still = clamp(stillnessDuration * 0.05, 0, 1);
+    const ringR = rd * (2.05 + 1.05*still);
+    const ring = ctx.createRadialGradient(x,y,rd*0.95, x,y, ringR);
+    ring.addColorStop(0, `rgba(167,139,250,${0.06 + 0.08*still})`);
+    ring.addColorStop(0.55, `rgba(96,165,250,${0.02 + 0.05*still})`);
+    ring.addColorStop(1, "rgba(96,165,250,0)");
+    ctx.fillStyle = ring;
+    ctx.beginPath(); ctx.arc(x,y,ringR,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+
+  // ------------------------------------------------------------------
+  // SPHERE BODY (increase edge definition; keep single specular white)
+  // ------------------------------------------------------------------
+  ctx.save();
+
+  // Soft shadow under orb (depth cue)
+  const shadowY = y + rd*0.82;
+  const sh = ctx.createRadialGradient(x, shadowY, rd*0.1, x, shadowY, rd*1.35);
+  sh.addColorStop(0, "rgba(0,0,0,0.22)");
+  sh.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = sh;
+  ctx.beginPath(); ctx.ellipse(x, shadowY, rd*1.05, rd*0.55, 0, 0, Math.PI*2); ctx.fill();
+
+  // Main plasma gradient: off-center core + colored mid + (non-zero) boundary
+  // IMPORTANT: keep edge from going fully transparent to preserve a "membrane"
+  const body = ctx.createRadialGradient(hx, hy, rd*0.05, x, y, rd);
+  body.addColorStop(0.0, `rgba(255,255,255,0.92)`);
+  body.addColorStop(0.18, `rgba(${Math.min(255,orbR+95)},${Math.min(255,orbG+75)},${Math.min(255,orbB+55)},0.92)`);
+  body.addColorStop(0.58, `rgba(${orbR},${orbG},${orbB},0.84)`);
+  // Boundary: slight alpha so the edge reads as a sphere (not fog)
+  body.addColorStop(1.0, `rgba(${Math.floor(orbR*0.20)},${Math.floor(orbG*0.24)},${Math.floor(orbB*0.20)},0.10)`);
+  ctx.fillStyle = body;
+  ctx.beginPath(); ctx.arc(x,y,rd,0,Math.PI*2); ctx.fill();
+
+  // Rim light (stronger, tinted; avoids "ghost white")
+  ctx.globalCompositeOperation = "screen";
+  const rim = ctx.createRadialGradient(x,y,rd*0.68, x,y,rd*1.06);
+  rim.addColorStop(0.0, "rgba(255,255,255,0)");
+  rim.addColorStop(0.60, `rgba(${Math.min(255,orbR+40)},${Math.min(255,orbG+40)},${Math.min(255,orbB+40)},0.08)`);
+  rim.addColorStop(1.0, `rgba(${Math.min(255,orbR+70)},${Math.min(255,orbG+70)},${Math.min(255,orbB+70)},0.16)`);
+  ctx.fillStyle = rim;
+  ctx.beginPath(); ctx.arc(x,y,rd*1.04,0,Math.PI*2); ctx.fill();
+
+  // Swirl bands (subtle plasma motion)
+  ctx.save();
+  ctx.beginPath(); ctx.arc(x,y,rd*0.98,0,Math.PI*2); ctx.clip();
+  ctx.globalCompositeOperation = "overlay";
+  ctx.globalAlpha = 0.52;
+  const rot = t*0.35 + speedFactor*0.8 + (zoneY-0.5)*0.4;
+  ctx.translate(x,y);
+  ctx.rotate(rot);
+  ctx.translate(-x,-y);
+  for (let i=0;i<4;i++){
+    const w = rd*2.2;
+    const h = rd*(0.34 + 0.08*i);
+    const yoff = y + (i-1.5)*rd*0.28;
+    const band = ctx.createLinearGradient(x-rd, yoff-h, x+rd, yoff+h);
+    band.addColorStop(0, `rgba(${orbR},${orbG},${orbB},0)`);
+    band.addColorStop(0.45, `rgba(${Math.min(255,orbR+70)},${Math.min(255,orbG+40)},${Math.min(255,orbB+80)},${0.16 + 0.07*speedFactor})`);
+    band.addColorStop(0.55, `rgba(255,255,255,${0.04 + 0.05*speedFactor})`);
+    band.addColorStop(1, `rgba(${orbR},${orbG},${orbB},0)`);
+    ctx.fillStyle = band;
+    ctx.fillRect(x-w/2, yoff-h/2, w, h);
+  }
+  ctx.restore();
+
+  // Grain/noise (very light, keeps it organic)
+  ctx.save();
+  ctx.beginPath(); ctx.arc(x,y,rd,0,Math.PI*2); ctx.clip();
+  ctx.globalCompositeOperation = "soft-light";
+  ctx.globalAlpha = 0.22;
+  const nx = (t*30) % __orbyNoise.width;
+  const ny = (t*22) % __orbyNoise.height;
+  ctx.drawImage(__orbyNoise, x-rd - nx, y-rd - ny, rd*2.2, rd*2.2);
+  ctx.restore();
+
+  // Specular highlight (THE only true white pop)
+  ctx.globalCompositeOperation = "screen";
+  const spec = ctx.createRadialGradient(hx, hy, rd*0.02, hx, hy, rd*0.55);
+  spec.addColorStop(0, "rgba(255,255,255,0.62)");
+  spec.addColorStop(0.35, "rgba(255,255,255,0.10)");
+  spec.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = spec;
+  ctx.beginPath(); ctx.ellipse(hx, hy, rd*0.55, rd*0.42, -0.35, 0, Math.PI*2); ctx.fill();
+
+  // Tiny inner spark (alive, but restrained)
+  ctx.globalCompositeOperation = "screen";
+  const spark = ctx.createRadialGradient(x - rd*0.06, y + rd*0.08, 0, x - rd*0.06, y + rd*0.08, rd*0.22);
+  spark.addColorStop(0, `rgba(255,255,255,${0.30 + 0.16*Math.sin(t*1.8)})`);
+  spark.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = spark;
+  ctx.beginPath(); ctx.arc(x - rd*0.06, y + rd*0.08, rd*0.22, 0, Math.PI*2); ctx.fill();
+
+  ctx.restore();
+}
+
+
+/* --------------------------------------------------------------------
+   CANVAS SETUP
+-------------------------------------------------------------------- */
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d", { alpha:false });
+
+// VISUAL FLAGS (no gameplay impact)
+const TRAIL_ENABLED = true;      // enables motion trail buffer      // disables motion trail buffer
+const BG_GLOW_ENABLED = false;    // disables background radial fog; keeps pure black
+
+
+let W=0, H=0, DPR=1;
+function resize(){
+  DPR = window.devicePixelRatio || 1;
+  W = Math.max(1, window.innerWidth);
+  H = Math.max(1, window.innerHeight);
+  canvas.width  = Math.floor(W * DPR);
+  canvas.height = Math.floor(H * DPR);
+  canvas.style.width = W + "px";
+  canvas.style.height = H + "px";
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+resize();
+addEventListener("resize", resize);
+
+/* --------------------------------------------------------------------
+   TRAIL BUFFER (ISOLATED — CANNOT BREAK ORBY)
+-------------------------------------------------------------------- */
+const trailCanvas = document.createElement("canvas");
+const trailCtx = trailCanvas.getContext("2d", { alpha:true });
+
+function resizeTrail(){
+  // match device pixels exactly
+  trailCanvas.width  = canvas.width;
+  trailCanvas.height = canvas.height;
+  // draw in CSS pixels
+  trailCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+resizeTrail();
+addEventListener("resize", resizeTrail);
+
+/* --------------------------------------------------------------------
+   AUDIO ENGINE (SAFE + PUNCHY)
+-------------------------------------------------------------------- */
+let AC = null;
+let masterGain = null;
+let harmonicBus = null;
+let drumBus = null;
+let arpBus = null;
+// Phase 2: New audio buses for layered sound
+let bassBus = null;
+let leadBus = null;
+let ambientBus = null;
+let masterFilter = null; // Dynamic filter for movement intensity
+let spaceIn = null; // Space send gain (for subtle speed->space bloom)
+
+
+/* --- START SOUND (classic power-on, single sound) --- */
+let __startBlipPlayed = false;
+function playStartBlip(){
+  try{
+    ensureAC();
+    if (__startBlipPlayed) return;
+    __startBlipPlayed = true;
+
+    // Make sure audio actually plays on first gesture
+    if (AC && AC.state === "suspended") AC.resume();
+
+    const t0 = AC.currentTime;
+    const osc = AC.createOscillator();
+    const gain = AC.createGain();
+
+    // Classic synth vibe (still ONE oscillator, ONE envelope)
+    osc.type = "triangle";
+
+    // Confident sweep (power-on) + tiny settle
+    osc.frequency.setValueAtTime(140, t0);
+    osc.frequency.exponentialRampToValueAtTime(760, t0 + 0.11);
+    osc.frequency.exponentialRampToValueAtTime(520, t0 + 0.22);
+
+    // Punchier envelope (no click): fast attack, brief hold, smooth tail
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.18, t0 + 0.014);
+    gain.gain.exponentialRampToValueAtTime(0.10, t0 + 0.09);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.28);
+
+    osc.connect(gain).connect(masterGain);
+    osc.start(t0);
+    osc.stop(t0 + 0.30);
+  }catch(e){ /* ignore */ }
+}
+
+
+/* --- START SCREEN ETHEREAL INTRO (generative, stops on Start) --- */
+let __intro = { running:false, nodes:[], timers:[], stop:null };
+
+function startIntroEthereal(force=false){
+  try{
+    ensureAC();
+    if (!AC) return;
+    // Default: only play while start screen exists.
+    // If force=true (e.g., replay trigger), allow it even after start screen is gone.
+    if (!force && !document.getElementById("startScreen")) return;
+    if (__intro.running) return;
+
+    // Respect autoplay: caller should be from a user gesture, but we also resume safely.
+    if (AC.state === "suspended") AC.resume();
+
+    __intro.running = true;
+
+    const t0 = AC.currentTime;
+
+    // A dedicated intro bus so we can fade cleanly without touching game mix.
+    const introBus = AC.createGain();
+    // Keep this clearly audible (intro runs through masterGain (0.42) + masterFilter).
+    // Prior levels were too quiet on many speakers.
+    introBus.gain.setValueAtTime(0.0001, t0);
+    introBus.gain.exponentialRampToValueAtTime(0.55, t0 + 0.45); // gentle fade in
+    introBus.connect(masterFilter); // stays under master filter for cohesion
+    __intro.nodes.push(introBus);
+
+    // Soft shimmer: two detuned sines through a mellow filter
+    const shFilter = AC.createBiquadFilter();
+    shFilter.type = "lowpass";
+    shFilter.frequency.setValueAtTime(2400, t0);
+    shFilter.Q.setValueAtTime(0.7, t0);
+    shFilter.connect(introBus);
+    __intro.nodes.push(shFilter);
+
+    function mkOsc(type, freq, detune){
+      const o = AC.createOscillator();
+      const g = AC.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(freq, t0);
+      o.detune.setValueAtTime(detune, t0);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.15, t0 + 0.35);
+      o.connect(g).connect(shFilter);
+      o.start(t0);
+      __intro.nodes.push(o, g);
+      return {o,g};
+    }
+    const a = mkOsc("sine", 220, -7);
+    const b = mkOsc("sine", 220, +7);
+
+    // Slow drift (LFO) for shimmer movement
+    const lfo = AC.createOscillator();
+    const lfoG = AC.createGain();
+    lfo.type = "sine";
+    lfo.frequency.setValueAtTime(0.08, t0);
+    lfoG.gain.setValueAtTime(35, t0);
+    lfo.connect(lfoG);
+    lfoG.connect(a.o.detune);
+    lfoG.connect(b.o.detune);
+    lfo.start(t0);
+    __intro.nodes.push(lfo, lfoG);
+
+    // Breath noise bed (very quiet): filtered noise
+    const noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
+    const data = noiseBuf.getChannelData(0);
+    for (let i=0;i<data.length;i++) data[i] = (Math.random()*2-1) * 0.35;
+
+    const noise = AC.createBufferSource();
+    noise.buffer = noiseBuf;
+    noise.loop = true;
+
+    const nFilter = AC.createBiquadFilter();
+    nFilter.type = "bandpass";
+    nFilter.frequency.setValueAtTime(520, t0);
+    nFilter.Q.setValueAtTime(0.8, t0);
+
+    const nGain = AC.createGain();
+    nGain.gain.setValueAtTime(0.0001, t0);
+    nGain.gain.exponentialRampToValueAtTime(0.06, t0 + 0.6);
+
+    noise.connect(nFilter).connect(nGain).connect(introBus);
+    noise.start(t0);
+    __intro.nodes.push(noise, nFilter, nGain);
+
+    // Generative “note cloud”: slow chord-tone wandering (scale-locked vibe)
+    const scale = [0, 2, 3, 5, 7, 10]; // minor-ish color (safe)
+    let step = 0;
+
+    function pickNote(){
+      const base = 196; // G3-ish
+      const deg = scale[(Math.random()*scale.length)|0];
+      const oct = (Math.random()<0.35) ? 12 : 0;
+      const semi = deg + oct;
+      return base * Math.pow(2, semi/12);
+    }
+
+    const cloud = AC.createOscillator();
+    const cloudG = AC.createGain();
+    const cloudF = AC.createBiquadFilter();
+    cloud.type = "triangle";
+    cloud.frequency.setValueAtTime(pickNote(), t0);
+    cloudG.gain.setValueAtTime(0.0001, t0);
+    cloudG.gain.exponentialRampToValueAtTime(0.09, t0 + 0.5);
+    cloudF.type = "lowpass";
+    cloudF.frequency.setValueAtTime(1800, t0);
+    cloudF.Q.setValueAtTime(0.9, t0);
+
+    cloud.connect(cloudF).connect(cloudG).connect(introBus);
+    cloud.start(t0);
+    __intro.nodes.push(cloud, cloudG, cloudF);
+
+    const tempo = ()=> Math.max(40, Math.min(140, bpm || 96));
+    const tickMs = ()=> (60000 / tempo()) * 2; // every 2 beats (slow)
+
+    const timer = setInterval(()=>{
+      if (!__intro.running) return;
+      if (!force && !document.getElementById("startScreen")) return;
+      const t = AC.currentTime;
+      // glide to next note
+      const f = pickNote();
+      cloud.frequency.cancelScheduledValues(t);
+      cloud.frequency.setTargetAtTime(f, t, 0.08);
+
+      // subtle shimmer filter breathing
+      const nf = 2000 + 700*Math.sin(step*0.7);
+      shFilter.frequency.setTargetAtTime(nf, t, 0.12);
+      nFilter.frequency.setTargetAtTime(420 + 180*Math.sin(step*0.55), t, 0.18);
+      step++;
+    }, tickMs());
+    __intro.timers.push(timer);
+
+    __intro.stop = function stopIntroEthereal(){
+      if (!__intro.running) return;
+      __intro.running = false;
+      try{
+        const t = AC.currentTime;
+        // Fade out bus + layers
+        introBus.gain.cancelScheduledValues(t);
+        introBus.gain.setValueAtTime(Math.max(0.0001, introBus.gain.value), t);
+        introBus.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+        // Stop oscillators after fade
+        setTimeout(()=>{
+          try{ cloud.stop(); }catch(e){}
+          try{ a.o.stop(); }catch(e){}
+          try{ b.o.stop(); }catch(e){}
+          try{ lfo.stop(); }catch(e){}
+          try{ noise.stop(); }catch(e){}
+        }, 420);
+      }catch(e){}
+      // Clear timers
+      for (const tm of __intro.timers){ try{ clearInterval(tm); }catch(e){} }
+      __intro.timers = [];
+    };
+  }catch(e){
+    console.error(e);
+  }
+}
+
+function stopIntroEthereal(){
+  try{ if (__intro.stop) __intro.stop(); }catch(e){}
+}
+
+function ensureAC(){
+  if (!AC){
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+
+    masterGain = AC.createGain();
+    masterGain.gain.value = 0.42;
+
+    harmonicBus = AC.createGain();
+    harmonicBus.gain.value = 0.45;
+
+    drumBus = AC.createGain();
+    drumBus.gain.value = 0.32;
+
+    arpBus = AC.createGain();
+    arpBus.gain.value = 0.25;
+
+    // Phase 2: New buses for layered sound
+    bassBus = AC.createGain();
+    bassBus.gain.value = 0.35;
+
+    leadBus = AC.createGain();
+    leadBus.gain.value = 0.22;
+
+    ambientBus = AC.createGain();
+    ambientBus.gain.value = 0.18;
+
+    // Master filter for movement intensity control
+    masterFilter = AC.createBiquadFilter();
+    masterFilter.type = "lowpass";
+    masterFilter.frequency.value = 8000;
+    masterFilter.Q.value = 0.7;
+
+    // Space send (feedback delay)
+    spaceIn = AC.createGain();
+    spaceIn.gain.value = 0.42;
+
+    const delay = AC.createDelay();
+    delay.delayTime.value = 0.25;
+
+    const feedback = AC.createGain();
+    feedback.gain.value = 0.33;
+
+    const tone = AC.createBiquadFilter();
+    tone.type = "lowpass";
+    tone.frequency.value = 4300;
+
+    spaceIn.connect(delay);
+    delay.connect(feedback);
+    feedback.connect(delay);
+    delay.connect(tone);
+    tone.connect(masterGain);
+
+    // Drum chain: lowshelf + highshelf + comp + soft sat
+    const drumLow = AC.createBiquadFilter();
+    drumLow.type = "lowshelf";
+    drumLow.frequency.value = 110;
+    drumLow.gain.value = 4.5;
+
+    const drumHi = AC.createBiquadFilter();
+    drumHi.type = "highshelf";
+    drumHi.frequency.value = 5200;
+    drumHi.gain.value = 1.5;
+
+    const drumComp = AC.createDynamicsCompressor();
+    drumComp.threshold.value = -18;
+    drumComp.knee.value = 18;
+    drumComp.ratio.value = 4.5;
+    drumComp.attack.value = 0.003;
+    drumComp.release.value = 0.12;
+
+    const drumSat = AC.createWaveShaper();
+    drumSat.curve = makeSaturationCurve(0.55);
+    drumSat.oversample = "2x";
+
+    const drumTrim = AC.createGain();
+    drumTrim.gain.value = 0.95;
+
+    drumBus.connect(drumLow);
+    drumLow.connect(drumHi);
+    drumHi.connect(drumComp);
+    drumComp.connect(drumSat);
+    drumSat.connect(drumTrim);
+
+    harmonicBus.connect(spaceIn);
+    arpBus.connect(spaceIn);
+    leadBus.connect(spaceIn);
+    ambientBus.connect(spaceIn);
+
+    // Route through master filter for dynamic control
+    harmonicBus.connect(masterFilter);
+    arpBus.connect(masterFilter);
+    leadBus.connect(masterFilter);
+    ambientBus.connect(masterFilter);
+    bassBus.connect(masterFilter);
+
+    drumTrim.connect(spaceIn);
+    drumTrim.connect(masterFilter);
+
+    masterFilter.connect(masterGain);
+    masterGain.connect(AC.destination);
+  }
+}
+
+/* --------------------------------------------------------------------
+   MUSIC THEORY CORE
+-------------------------------------------------------------------- */
+let bpm = 96;
+let bpmLocked = false; // when true, only user actions can change BPM
+function setBpm(next, source = "system"){
+  const v = clamp(Number(next) || 0, 40, 200);
+  if (bpmLocked && source !== "user") return;
+  bpm = v;
+  // keep heartbeat locked to tempo
+  if (boomOn){ stopBoom(); startBoom(); }
+  // keep UI in sync if controls exist
+  if (typeof syncBpmUI === "function") syncBpmUI();
+  if (typeof updateNowPlaying === "function") updateNowPlaying();
+}
+
+let rng = mulberry32(1);
+let rootMidi = 57; // A3
+const pentMinorIntervals = [0, 3, 5, 7, 10];
+let chordDegrees = [0, 7, 10];
+let drumEnergy = 0.55;
+
+const musicState = { harmonyMode:2, rhythmMode:5, textureMode:8 };
+const HARMONY_LABELS = { 1:"Open", 2:"Triad", 3:"Extended" };
+const RHYTHM_LABELS  = { 4:"Sparse", 5:"Groove", 6:"Flow" };
+const TEXTURE_LABELS = { 7:"Warm", 8:"Shimmer", 9:"Air" };
+
+let autoDrums = false;
+let boomOn = false; // background heartbeat
+let flowMode = false;
+
+function midiToFreq(m){ return 440 * Math.pow(2, (m - 69) / 12); }
+function midiToName(m){
+  const names = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  return names[(m % 12 + 12) % 12];
+}
+function chooseRootFromSeed(seed){
+  const roots = [45, 48, 50, 52, 57]; // A2, C3, D3, E3, A3
+  rootMidi = roots[Math.abs(seed) % roots.length];
+}
+function applySeed(seed){
+  rng = mulberry32(seed);
+  chooseRootFromSeed(seed);
+  const t = (seed % 1000) / 1000;
+  setBpm(80 + Math.floor(t * 32), 'system'); // 80–112
+  if (typeof reseedFlowFromCurrentRng === "function") reseedFlowFromCurrentRng();
+  updateNowPlaying();
+}
+function setChordFromHarmonyMode(){
+  const m = musicState.harmonyMode;
+  if (m === 1) chordDegrees = [0, 7];
+  else if (m === 2) chordDegrees = [0, 3, 7];
+  else{
+    chordDegrees = [0, 3, 7, 10];
+    if (musicState.textureMode >= 8) chordDegrees.push(14); // 9th
+  }
+  chordDegrees = Array.from(new Set(chordDegrees)).slice(0, 5);
+}
+
+/* --------------------------------------------------------------------
+   SONG DSL
+-------------------------------------------------------------------- */
+let songSections = null;
+let songActive = false;
+let currentSectionIndex = 0;
+let currentCellIndex = 0;
+let cellTimeLeft = 0;
+
+const sectionColorPalette = [
+  { r:120, g:200, b:255 },
+  { r:200, g:150, b:255 },
+  { r:150, g:255, b:200 },
+  { r:255, g:210, b:150 }
+];
+let currentSectionColor = { r:120, g:200, b:255 };
+
+function parseSongPattern(text){
+  const raw = (text || "").trim();
+  if (!raw) return null;
+
+  const sectionStrings = raw.split("...");
+  const sections = [];
+
+  sectionStrings.forEach(secStr => {
+    const tokens = secStr.trim().split(/\s+/).filter(Boolean);
+    const cells = [];
+    tokens.forEach(tok => {
+      if (!/^-?\d+$/.test(tok)) return;
+      let n = Math.abs(parseInt(tok, 10));
+      let s = n.toString().padStart(3, "0");
+      const a = parseInt(s[0], 10);
+      const b = parseInt(s[1], 10);
+      const c = parseInt(s[2], 10);
+      cells.push({ a, b, c });
+    });
+    if (cells.length) sections.push(cells);
+  });
+
+  return sections.length ? sections : null;
+}
+
+function applySongCell(cell){
+  if (!cell) return;
+  const a = cell.a, b = cell.b, c = cell.c;
+
+  const baseIndexMap = [0,1,2,3,4,0,1,2,3,4];
+  const baseIdx = baseIndexMap[a % baseIndexMap.length];
+  const baseInterval = pentMinorIntervals[baseIdx];
+
+  const degrees = [baseInterval];
+  const richness = Math.min(4, Math.floor(b / 2));
+  for (let i = 1; i <= richness; i++){
+    degrees.push(pentMinorIntervals[(baseIdx + i) % pentMinorIntervals.length]);
+  }
+  chordDegrees = Array.from(new Set(degrees)).slice(0, 5);
+
+  const energyNorm = Math.min(1, Math.max(0, c / 9));
+  setBpm(80 + Math.round(energyNorm * 30), 'system');
+  drumEnergy = 0.2 + energyNorm * 0.8;
+
+  if (songSections && songSections.length){
+    currentSectionColor = sectionColorPalette[currentSectionIndex % sectionColorPalette.length];
+  }
+  playPadChord({ accent:true });
+  updateNowPlaying();
+}
+
+function computeCellDuration(){
+  const secondsPerBeat = 60 / bpm;
+  return secondsPerBeat * 16; // 4 bars
+}
+
+function startSongFromPattern(patternText){
+  ensureAC();
+  const sections = parseSongPattern(patternText);
+  if (!sections){
+    setSongStatus("Song: no valid cells (use 3-digit numbers)");
+    songActive = false;
+    songSections = null;
+    return;
+  }
+  songSections = sections;
+  songActive = true;
+  currentSectionIndex = 0;
+  currentCellIndex = 0;
+
+  applySongCell(songSections[0][0]);
+  cellTimeLeft = computeCellDuration();
+  setSongStatus(`Song: playing — ${songSections.length} section(s), looped.`);
+}
+
+function stopSong(){
+  songActive = false;
+  songSections = null;
+  setSongStatus("Song: stopped");
+}
+
+/* --------------------------------------------------------------------
+   SYNTH BUILDING BLOCKS
+-------------------------------------------------------------------- */
+function playPadChord(opts = {}){
+  if (!AC) return;
+  const t = AC.currentTime;
+  const rootFreq = midiToFreq(rootMidi);
+
+  const accent = !!opts.accent;
+  const basePeak = accent ? 0.10 : 0.075;
+  const attack   = accent ? 0.45 : 0.70;
+  const releaseT = accent ? 1.35 : 1.55;
+
+  chordDegrees.forEach((deg, i) => {
+    const freq = rootFreq * Math.pow(2, deg / 12);
+
+    const oscA = AC.createOscillator();
+    const oscB = AC.createOscillator();
+
+    const tex = musicState.textureMode;
+    oscA.type = (tex === 7) ? "sine" : (tex === 8) ? "triangle" : "sine";
+    oscB.type = (tex === 9) ? "triangle" : "sine";
+
+    const g = AC.createGain();
+    g.gain.setValueAtTime(0.0, t);
+    g.gain.linearRampToValueAtTime((basePeak / (1 + i * 0.35)), t + attack);
+    g.gain.setTargetAtTime(0.0001, t + (accent ? 1.5 : 2.2), releaseT);
+
+    oscA.frequency.setValueAtTime(freq, t);
+    const shimmer = (tex >= 8) ? 2.0 : 1.0;
+    oscB.frequency.setValueAtTime(freq * shimmer, t);
+
+    const f = AC.createBiquadFilter();
+f.type = "lowpass";
+// Orb speed brightens the pad's attack (still warm; no harshness)
+const os = (typeof orbSpeed === "number") ? orbSpeed : 1.0;
+const orbNorm = clamp((os - ORB_SPEED_MIN) / (ORB_SPEED_MAX - ORB_SPEED_MIN), 0, 1);
+const padBright = 0.80 + 0.35 * orbNorm; // 0.80 → 1.15
+f.frequency.setValueAtTime(2200 * padBright, t);
+f.frequency.setTargetAtTime(1200 * padBright, t + 0.25, 0.25);oscA.connect(f);
+    oscB.connect(f);
+    f.connect(g).connect(harmonicBus);
+
+    oscA.start(t);
+    oscB.start(t);
+    oscA.stop(t + 5.0);
+    oscB.stop(t + 4.2);
+  });
+}
+
+function playArpNote(directionVec, shiftSemi = 0){
+  if (!AC) return;
+  const t = AC.currentTime;
+  const rootFreq = midiToFreq(rootMidi + shiftSemi);
+
+  let idx = 0;
+  if (directionVec.dx > 0 && directionVec.dy === 0) idx = 1;
+  if (directionVec.dx < 0 && directionVec.dy === 0) idx = 3;
+  if (directionVec.dy < 0) idx = 4;
+  if (directionVec.dy > 0) idx = 2;
+
+  const harmony = musicState.harmonyMode;
+  let degreeSemi;
+  if (harmony === 1) degreeSemi = [0,7][idx % 2];
+  else if (harmony === 2) degreeSemi = [0,3,7][idx % 3];
+  else degreeSemi = [0,3,7,10,14][idx % 5];
+
+  const freq = rootFreq * Math.pow(2, degreeSemi / 12);
+
+  const osc = AC.createOscillator();
+  const tex = musicState.textureMode;
+  osc.type = (tex === 7) ? "triangle" : (tex === 8) ? "sine" : "triangle";
+
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.16, t + 0.05);
+  g.gain.setTargetAtTime(0.0001, t + 0.35, 0.25);
+
+  const f = AC.createBiquadFilter();
+f.type = "lowpass";
+// Orb speed adds tasteful "sparkle" without increasing note count
+const os = (typeof orbSpeed === "number") ? orbSpeed : 1.0;
+const orbNorm = clamp((os - ORB_SPEED_MIN) / (ORB_SPEED_MAX - ORB_SPEED_MIN), 0, 1);
+const noteBright = 0.85 + 0.45 * orbNorm; // 0.85 → 1.30
+f.frequency.setValueAtTime(1600 * noteBright, t);
+f.frequency.setTargetAtTime(800 * noteBright, t + 0.2, 0.25);osc.frequency.setValueAtTime(freq, t);
+  osc.connect(f).connect(g).connect(arpBus);
+
+  if (tex >= 8){
+    const osc2 = AC.createOscillator();
+    osc2.type = "sine";
+    osc2.frequency.setValueAtTime(freq * 2, t);
+    const g2 = AC.createGain();
+    g2.gain.setValueAtTime(0, t);
+    g2.gain.linearRampToValueAtTime(0.06, t + 0.06);
+    g2.gain.setTargetAtTime(0.0001, t + 0.35, 0.25);
+    osc2.connect(f).connect(g2).connect(arpBus);
+    osc2.start(t);
+    osc2.stop(t + 0.65);
+  }
+
+  osc.start(t);
+  osc.stop(t + 0.65);
+}
+
+function noiseBurst({gain=0.18, dur=0.2, hp=6000, bp=null, at=null}){
+  if (!AC) return;
+  const t = (at ?? AC.currentTime);
+  const bufferSize = 4096;
+  const noise = AC.createBufferSource();
+  const buffer = AC.createBuffer(1, bufferSize, AC.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * 0.5;
+  noise.buffer = buffer;
+
+  let node = noise;
+  if (bp){
+    const band = AC.createBiquadFilter();
+    band.type = "bandpass";
+    band.frequency.value = bp.freq;
+    band.Q.value = bp.q ?? 0.9;
+    node = node.connect(band);
+  } else {
+    const high = AC.createBiquadFilter();
+    high.type = "highpass";
+    high.frequency.value = hp;
+    node = node.connect(high);
+  }
+
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0, t);
+  g.gain.linearRampToValueAtTime(gain, t + 0.004);
+  g.gain.setTargetAtTime(0.0001, t + dur * 0.25, dur * 0.18);
+
+  node.connect(g).connect(drumBus);
+  noise.start(t);
+  noise.stop(t + dur);
+}
+
+function playSoftKick(strength = 1, at = null){
+  if (!AC) return;
+  const t = (at ?? AC.currentTime);
+
+  const body = AC.createOscillator(); body.type = "sine";
+  const sub  = AC.createOscillator(); sub.type  = "sine";
+
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0, t);
+  g.gain.linearRampToValueAtTime(0.55 * strength, t + 0.006);
+  g.gain.setTargetAtTime(0.0001, t + 0.11, 0.12);
+
+  body.frequency.setValueAtTime(150, t);
+  body.frequency.exponentialRampToValueAtTime(52, t + 0.09);
+  body.frequency.exponentialRampToValueAtTime(40, t + 0.22);
+
+  sub.frequency.setValueAtTime(46, t);
+  const subG = AC.createGain();
+  subG.gain.setValueAtTime(0.0, t);
+  subG.gain.linearRampToValueAtTime(0.18 * strength, t + 0.01);
+  subG.gain.setTargetAtTime(0.0001, t + 0.16, 0.16);
+
+  const lp = AC.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.setValueAtTime(1800, t);
+  lp.frequency.setTargetAtTime(900, t + 0.03, 0.08);
+
+  body.connect(lp).connect(g).connect(drumBus);
+  sub.connect(subG).connect(drumBus);
+
+  noiseBurst({ gain: 0.07 * strength, dur: 0.03, bp: { freq: 3200, q: 1.2 }, at: t });
+
+  body.start(t); sub.start(t);
+  body.stop(t + 0.5); sub.stop(t + 0.55);
+}
+
+
+function playBoomKick(strength = 1, at = null){
+  // Deeper, rounder kick for the heartbeat bed
+  if (!AC) return;
+  const t = (at ?? AC.currentTime);
+
+  const body = AC.createOscillator(); body.type = "sine";
+  const sub  = AC.createOscillator(); sub.type  = "sine";
+
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0, t);
+  g.gain.linearRampToValueAtTime(0.62 * strength, t + 0.006);
+  g.gain.setTargetAtTime(0.0001, t + 0.14, 0.14);
+
+  body.frequency.setValueAtTime(120, t);
+  body.frequency.exponentialRampToValueAtTime(48, t + 0.10);
+  body.frequency.exponentialRampToValueAtTime(36, t + 0.26);
+
+  sub.frequency.setValueAtTime(38, t);
+  const subG = AC.createGain();
+  subG.gain.setValueAtTime(0.0, t);
+  subG.gain.linearRampToValueAtTime(0.26 * strength, t + 0.012);
+  subG.gain.setTargetAtTime(0.0001, t + 0.22, 0.20);
+
+  // Tiny "thump-click" so it reads on phone speakers
+  noiseBurst({ gain: 0.045 * strength, dur: 0.018, bp: { freq: 1850, q: 0.9 }, at: t });
+
+  body.connect(g).connect(drumBus);
+  sub.connect(subG).connect(drumBus);
+
+  body.start(t); sub.start(t);
+  body.stop(t + 0.6); sub.stop(t + 0.65);
+}
+
+function playBeap(strength = 1, at = null){
+  if (!AC) return;
+  const t = (at ?? AC.currentTime);
+  const o = AC.createOscillator();
+  o.type = "triangle";
+  o.frequency.setValueAtTime(880, t);
+  o.frequency.exponentialRampToValueAtTime(660, t + 0.06);
+
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0, t);
+  g.gain.linearRampToValueAtTime(0.10 * strength, t + 0.003);
+  g.gain.setTargetAtTime(0.0001, t + 0.04, 0.06);
+
+  const hp = AC.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.setValueAtTime(420, t);
+
+  o.connect(hp).connect(g).connect(drumBus);
+  o.start(t);
+  o.stop(t + 0.12);
+}
+
+// BOOM: background heartbeat scheduler (8th-note grid: boom _ boom _ boom _ boom beap)
+let boomTimer = null;
+let boomNextTime = 0;
+let boomStep = 0;
+const BOOM_STEPS = 8; // 8 eighth-notes per bar
+const BOOM_PATTERN = ["boom", null, "boom", null, "boom", null, "boom", null];
+
+function boomStepDur(){ return secondsPerBeat() / 2; } // eighth note
+
+function startBoom(){
+  if (!AC || boomTimer) return;
+  boomNextTime = AC.currentTime + 0.05;
+  boomStep = 0;
+  boomTimer = setInterval(boomScheduler, 25);
+}
+function stopBoom(){
+  if (boomTimer){ clearInterval(boomTimer); boomTimer = null; }
+}
+function toggleBoom(){
+  boomOn = !boomOn;
+  if (boomOn) startBoom();
+  else stopBoom();
+  showToast(boomOn ? "BOOM ON" : "BOOM OFF");
+}
+
+function boomScheduler(){
+  if (!boomOn || !AC) return;
+  const lookahead = 0.14;
+  while (boomNextTime < AC.currentTime + lookahead){
+    const kind = BOOM_PATTERN[boomStep];
+    const strength = Math.min(1.25, 0.55 + drumEnergy * 0.9) * (musicState.rhythmMode === 4 ? 0.95 : musicState.rhythmMode === 5 ? 1.0 : 1.06);
+    if (kind === "boom") playBoomKick(strength, boomNextTime);
+    
+    boomNextTime += boomStepDur();
+    boomStep = (boomStep + 1) % BOOM_STEPS;
+  }
+}
+
+// CLICK: background metronome bed (8th-note grid: _ beap _ beap ...)
+let clickOn = false;
+let clickTimer = null;
+let clickNextTime = 0;
+let clickStep = 0;
+const CLICK_STEPS = 8;
+const CLICK_PATTERN = [null, "beap", null, "beap", null, "beap", null, "beap"]; // offbeats
+
+function clickStepDur(){ return secondsPerBeat() / 2; } // eighth note
+
+function startClick(){
+  if (!AC || clickTimer) return;
+  clickNextTime = AC.currentTime + 0.05;
+  clickStep = 0;
+  clickTimer = setInterval(clickScheduler, 25);
+}
+function stopClick(){
+  if (clickTimer){ clearInterval(clickTimer); clickTimer = null; }
+}
+function toggleClick(){
+  clickOn = !clickOn;
+  if (clickOn) startClick();
+  else stopClick();
+  showToast(clickOn ? "CLICK ON" : "CLICK OFF");
+}
+
+function clickScheduler(){
+  if (!clickOn || !AC) return;
+  const lookahead = 0.14;
+  while (clickNextTime < AC.currentTime + lookahead){
+    const kind = CLICK_PATTERN[clickStep];
+    if (kind === "beap"){
+      const strength = 0.55 + drumEnergy * 0.35;
+      playBeap(0.85 * strength, clickNextTime);
+    }
+    clickNextTime += clickStepDur();
+    clickStep = (clickStep + 1) % CLICK_STEPS;
+  }
+}
+
+function playSoftHat(intensity = 1, at = null){
+  noiseBurst({ gain: 0.16 * intensity, dur: 0.11, hp: 7800, at });
+}
+function playSoftSnare(intensity = 1, at = null){
+  if (!AC) return;
+  const t = (at ?? AC.currentTime);
+  noiseBurst({ gain: 0.20 * intensity, dur: 0.16, bp: { freq: 2100, q: 0.85 }, at: t });
+
+  const tone = AC.createOscillator();
+  tone.type = "triangle";
+  tone.frequency.setValueAtTime(210, t);
+  tone.frequency.exponentialRampToValueAtTime(130, t + 0.09);
+
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0, t);
+  g.gain.linearRampToValueAtTime(0.09 * intensity, t + 0.006);
+  g.gain.setTargetAtTime(0.0001, t + 0.07, 0.10);
+
+  tone.connect(g).connect(drumBus);
+  tone.start(t);
+  tone.stop(t + 0.22);
+}
+function playSoftClap(intensity = 1, at = null){
+  if (!AC) return;
+  const t = (at ?? AC.currentTime);
+
+  noiseBurst({ gain: 0.10 * intensity, dur: 0.06, bp: { freq: 1700, q: 0.95 }, at: t });
+  noiseBurst({ gain: 0.09 * intensity, dur: 0.07, bp: { freq: 2300, q: 0.90 }, at: t + 0.014 });
+  noiseBurst({ gain: 0.07 * intensity, dur: 0.08, bp: { freq: 3200, q: 0.85 }, at: t + 0.028 });
+
+  const body = AC.createOscillator();
+  body.type = "sine";
+  body.frequency.setValueAtTime(240, t);
+
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0, t);
+  g.gain.linearRampToValueAtTime(0.05 * intensity, t + 0.01);
+  g.gain.setTargetAtTime(0.0001, t + 0.05, 0.12);
+
+  const bp = AC.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.setValueAtTime(900, t);
+  bp.Q.value = 0.7;
+
+  body.connect(bp).connect(g).connect(drumBus);
+  body.start(t);
+  body.stop(t + 0.18);
+}
+
+// Crash cymbal for hold+release
+function playCrash(intensity = 1, at = null){
+  if (!AC) return;
+  const t = (at ?? AC.currentTime);
+
+  // Long noise burst with decay
+  noiseBurst({ gain: 0.25 * intensity, dur: 0.8, hp: 4000, at: t });
+  noiseBurst({ gain: 0.18 * intensity, dur: 1.2, hp: 6000, at: t + 0.02 });
+  noiseBurst({ gain: 0.12 * intensity, dur: 1.5, hp: 8000, at: t + 0.05 });
+}
+
+// Snare fill for double-tap
+function playSnareRoll(intensity = 1){
+  if (!AC) return;
+  const t = AC.currentTime;
+  const step = secondsPerBeat() / 8;
+  for (let i = 0; i < 4; i++){
+    playSoftSnare(intensity * (0.6 + i * 0.1), t + i * step);
+  }
+}
+
+/* --------------------------------------------------------------------
+   PHASE 2: NEW SYNTH LAYERS
+-------------------------------------------------------------------- */
+
+// Bass synth - triggered by lower screen position / downward movement
+function playBassNote(freqMultiplier = 1, intensity = 1, sustain = false){
+  if (!AC || !bassBus) return;
+  const t = AC.currentTime;
+  const rootFreq = midiToFreq(rootMidi - 12); // One octave below root
+  const freq = rootFreq * freqMultiplier;
+
+  const osc = AC.createOscillator();
+  osc.type = "sine";
+
+  const sub = AC.createOscillator();
+  sub.type = "sine";
+  sub.frequency.setValueAtTime(freq / 2, t); // Sub-bass
+
+  const g = AC.createGain();
+  const attack = sustain ? 0.15 : 0.08;
+  const release = sustain ? 1.2 : 0.4;
+
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.28 * intensity, t + attack);
+  g.gain.setTargetAtTime(0.0001, t + (sustain ? 2.5 : 0.5), release);
+
+  const subG = AC.createGain();
+  subG.gain.setValueAtTime(0, t);
+  subG.gain.linearRampToValueAtTime(0.18 * intensity, t + attack * 1.2);
+  subG.gain.setTargetAtTime(0.0001, t + (sustain ? 2.8 : 0.6), release * 1.2);
+
+  // Subtle filter movement
+  const f = AC.createBiquadFilter();
+  f.type = "lowpass";
+  f.frequency.setValueAtTime(400, t);
+  f.frequency.linearRampToValueAtTime(250 + intensity * 150, t + attack);
+  f.frequency.setTargetAtTime(200, t + attack + 0.2, 0.3);
+  f.Q.value = 2;
+
+  osc.frequency.setValueAtTime(freq, t);
+  osc.connect(f).connect(g).connect(bassBus);
+  sub.connect(subG).connect(bassBus);
+
+  osc.start(t);
+  sub.start(t);
+  osc.stop(t + 4);
+  sub.stop(t + 4.5);
+}
+
+// Lead melody synth - triggered by upper screen / upward movement
+function playLeadNote(directionVec, intensity = 1, shiftSemi = 0){
+  if (!AC || !leadBus) return;
+  const t = AC.currentTime;
+  const rootFreq = midiToFreq(rootMidi + 12 + shiftSemi); // One octave above root
+
+  // Map direction to scale degree (pentatonic)
+  let idx = 2; // default middle
+  if (directionVec.dx > 0) idx = 3;
+  if (directionVec.dx < 0) idx = 1;
+  if (directionVec.dy < 0) idx = 4;
+  if (directionVec.dy > 0) idx = 0;
+
+  const harmony = musicState.harmonyMode;
+  let degreeSemi;
+  if (harmony === 1) degreeSemi = [0, 7, 12][idx % 3];
+  else if (harmony === 2) degreeSemi = [0, 3, 7, 10, 12][idx % 5];
+  else degreeSemi = [0, 3, 5, 7, 10, 12, 14][idx % 7];
+
+  const freq = rootFreq * Math.pow(2, degreeSemi / 12);
+
+  const osc = AC.createOscillator();
+  const tex = musicState.textureMode;
+  osc.type = (tex === 7) ? "sine" : (tex === 8) ? "triangle" : "sawtooth";
+
+  // Vibrato LFO
+  const lfo = AC.createOscillator();
+  const lfoGain = AC.createGain();
+  lfo.frequency.value = 5 + intensity * 2;
+  lfoGain.gain.value = freq * 0.008 * intensity;
+  lfo.connect(lfoGain).connect(osc.frequency);
+
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.14 * intensity, t + 0.06);
+  g.gain.setTargetAtTime(0.08 * intensity, t + 0.15, 0.1);
+  g.gain.setTargetAtTime(0.0001, t + 0.6, 0.35);
+
+  // Bright filter that closes
+  const f = AC.createBiquadFilter();
+  f.type = "lowpass";
+  f.frequency.setValueAtTime(3000 + intensity * 2000, t);
+  f.frequency.setTargetAtTime(1200, t + 0.15, 0.25);
+  f.Q.value = 1.5;
+
+  osc.frequency.setValueAtTime(freq, t);
+  osc.connect(f).connect(g).connect(leadBus);
+
+  lfo.start(t);
+  osc.start(t);
+  lfo.stop(t + 1.2);
+  osc.stop(t + 1.2);
+}
+
+// Ambient drone - swells when player is still
+let ambientDroneNode = null;
+let ambientDroneGain = null;
+let ambientDroneActive = false;
+
+function startAmbientDrone(){
+  if (!AC || !ambientBus || ambientDroneActive) return;
+  ambientDroneActive = true;
+  const t = AC.currentTime;
+  const rootFreq = midiToFreq(rootMidi);
+
+  // Create layered drone oscillators
+  const oscs = [];
+  const freqs = [rootFreq * 0.5, rootFreq, rootFreq * 1.5, rootFreq * 2];
+
+  ambientDroneGain = AC.createGain();
+  ambientDroneGain.gain.setValueAtTime(0, t);
+  ambientDroneGain.gain.linearRampToValueAtTime(0.12, t + 2.5);
+
+  const f = AC.createBiquadFilter();
+  f.type = "lowpass";
+  f.frequency.value = 1200;
+  f.Q.value = 0.5;
+
+  freqs.forEach((freq, i) => {
+    const osc = AC.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq, t);
+
+    // Subtle detuning for warmth
+    const detune = (i - 1.5) * 4;
+    osc.detune.value = detune;
+
+    const oscGain = AC.createGain();
+    oscGain.gain.value = 0.08 / (1 + i * 0.3);
+
+    osc.connect(oscGain).connect(f);
+    osc.start(t);
+    oscs.push(osc);
+  });
+
+  f.connect(ambientDroneGain).connect(ambientBus);
+  ambientDroneNode = { oscs, filter: f };
+}
+
+function fadeOutAmbientDrone(){
+  if (!AC || !ambientDroneGain || !ambientDroneActive) return;
+  const t = AC.currentTime;
+
+  ambientDroneGain.gain.cancelScheduledValues(t);
+  ambientDroneGain.gain.setValueAtTime(ambientDroneGain.gain.value, t);
+  ambientDroneGain.gain.linearRampToValueAtTime(0, t + 1.5);
+
+  setTimeout(() => {
+    if (ambientDroneNode && ambientDroneNode.oscs){
+      ambientDroneNode.oscs.forEach(osc => {
+        try { osc.stop(); } catch(e){}
+      });
+    }
+    ambientDroneNode = null;
+    ambientDroneGain = null;
+    ambientDroneActive = false;
+  }, 1600);
+}
+
+function updateAmbientDroneLevel(stillnessDuration){
+  if (!ambientDroneGain || !AC) return;
+  // Swell based on how long player has been still (0-3 seconds)
+  const level = Math.min(0.18, 0.06 + stillnessDuration * 0.04);
+  const t = AC.currentTime;
+  ambientDroneGain.gain.setTargetAtTime(level, t, 0.5);
+}
+
+/* --------------------------------------------------------------------
+   PHASE 2: MOVEMENT DYNAMICS TRACKING
+-------------------------------------------------------------------- */
+let movementSpeed = 0;
+let stillnessDuration = 0;
+let lastMoveTime = 0;
+let recentPositions = [];
+let currentFilterTarget = 8000;
+
+// Track movement for intensity calculations
+function updateMovementDynamics(speed, dt){
+  movementSpeed = speed;
+
+  if (speed < 10){
+    stillnessDuration += dt;
+    if (stillnessDuration > 0.8 && !ambientDroneActive){
+      startAmbientDrone();
+    }
+    if (ambientDroneActive){
+      updateAmbientDroneLevel(stillnessDuration);
+    }
+  } else {
+    if (stillnessDuration > 0.5 && ambientDroneActive){
+      fadeOutAmbientDrone();
+    }
+    stillnessDuration = 0;
+    lastMoveTime = performance.now();
+  }// Update master filter based on motion + orbSpeed (performance)
+// Position = harmony, Motion = phrase, OrbSpeed = brightness/energy (musical, not note spam)
+if (masterFilter && AC){
+  const speedNorm = Math.min(1, speed / 220); // movement speed
+  const os = (typeof orbSpeed === "number") ? orbSpeed : 1.0;
+  const orbNorm = clamp((os - ORB_SPEED_MIN) / (ORB_SPEED_MAX - ORB_SPEED_MIN), 0, 1);
+
+  // Weighted blend keeps it controlled: movement still matters, orbSpeed shapes the "lens"
+  const bright = clamp(0.60 * speedNorm + 0.40 * orbNorm, 0, 1);
+
+  // Warm → open (lowpass cutoff)
+  currentFilterTarget = 1800 + bright * 7200; // ~1.8kHz → ~9kHz
+  masterFilter.frequency.setTargetAtTime(currentFilterTarget, AC.currentTime, 0.12);
+
+  // Slight Q lift at higher brightness for "shimmer focus"
+  masterFilter.Q.setTargetAtTime(0.7 + bright * 0.55, AC.currentTime, 0.18);
+
+  // Subtle space bloom with speed (wider feel, not louder)
+  if (spaceIn){
+    const base = 0.38;
+    const bloom = 0.16 * orbNorm + 0.10 * speedNorm; // gentle
+    spaceIn.gain.setTargetAtTime(clamp(base + bloom, 0.28, 0.62), AC.currentTime, 0.18);
+  }
+}}
+
+// Get Y-position based frequency zone (0 = bottom/bass, 1 = top/lead)
+function getVerticalZone(y, screenHeight){
+  return 1 - clamp(y / screenHeight, 0, 1);
+}
+
+/* --------------------------------------------------------------------
+   PLAYER MOVEMENT + FLOW MODE
+-------------------------------------------------------------------- */
+let player = { x:200, y:200, dx:0, dy:0, vx:0, vy:0, size:18 };
+// Start centered by default
+try{ player.x = W * 0.5; player.y = H * 0.5; }catch(_){ }
+
+// --- CLONE ORB (press C to split) ---
+let clone = null; // {x,y,dx,dy,vx,vy,size}
+function spawnClone(){
+  if (clone) return;
+  clone = {
+    x: player.x + player.size * 2.2,
+    y: player.y,
+    dx: 0, dy: 0,
+    vx: 0, vy: 0,
+    size: player.size
+  };
+  // "split" chirp
+  try{ playBeap(1.15); }catch(_){}
+  try{ showToast("Clone split"); }catch(_){}
+}
+
+function despawnClone(){
+  if (!clone) return;
+  // Optional: a tiny "fusion" nudge back into the main orb (visual/feel only)
+  // (No physics changes to the player to avoid breaking gameplay.)
+  clone = null;
+  // "fuse" chirp (lower + warmer)
+  try{ playBeap(0.85); }catch(_){}
+  try{ showToast("Clone fused"); }catch(_){}
+}
+
+function toggleClone(){
+  if (clone) despawnClone();
+  else spawnClone();
+}
+
+
+
+
+let flowT = 0;
+let flowParams = { a:0.35, b:0.27, phase:1.2, rx:0.34, ry:0.26, drift:0.035 };
+
+function reseedFlowFromCurrentRng(){
+  flowParams.a = 0.18 + rng() * 0.55;
+  flowParams.b = 0.18 + rng() * 0.55;
+  flowParams.phase = rng() * Math.PI * 2;
+  flowParams.rx = 0.22 + rng() * 0.33;
+  flowParams.ry = 0.18 + rng() * 0.30;
+  flowParams.drift = 0.02 + rng() * 0.05;
+}
+function toggleFlowMode(){
+  flowMode = !flowMode;
+  if (flowMode){
+    player.dx = 0; player.dy = 0;
+    reseedFlowFromCurrentRng();
+    flowT = 0;
+  }
+  refreshTouchLabels();
+  updateNowPlaying();
+}
+
+/* --------------------------------------------------------------------
+   UI + HELP
+-------------------------------------------------------------------- */
+const panel = document.getElementById("panel");
+const togglePanelBtn = document.getElementById("togglePanelBtn");
+togglePanelBtn.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); panel.classList.toggle("collapsed"); });
+
+const helpBtn = document.getElementById("helpBtn");
+const helpPanel = document.getElementById("helpPanel");
+helpBtn.addEventListener("click", (e)=>{
+  e.preventDefault(); 
+/* --------------------------------------------------------------------
+   UI IDLE DIM (visual only)
+-------------------------------------------------------------------- */
+let _uiIdleT = null;
+function uiTouch(){
+  try{ panel.classList.remove("idle"); }catch(_){}
+  clearTimeout(_uiIdleT);
+  _uiIdleT = setTimeout(()=>{
+    try{
+      // don't dim if user is actively hovering, collapsed, or the HUD is hidden
+      if (!panel.classList.contains("collapsed") && !panel.classList.contains("uiHidden")){
+        panel.classList.add("idle");
+      }
+    }catch(_){}
+  }, 2500);
+}
+["keydown","mousedown","mousemove","pointerdown","wheel","focusin","touchstart"].forEach(ev=>{
+  window.addEventListener(ev, uiTouch, {passive:true});
+});
+uiTouch();
+e.stopPropagation();
+  helpPanel.style.display = (helpPanel.style.display === "block") ? "none" : "block";
+});
+
+const overlay = document.getElementById("overlayMsg");
+
+const startScreen = document.getElementById("startScreen");
+
+// --- START ORB (visual-only) -----------------------------------------
+const startOrbCanvas = document.getElementById("startOrb");
+const startOrbCtx = startOrbCanvas ? startOrbCanvas.getContext("2d", { alpha:true }) : null;
+
+function resizeStartOrb(){
+  if(!startOrbCanvas || !startOrbCtx) return;
+  const sizeCss = Math.min(280, Math.floor(Math.min(W, H) * 0.42));
+  startOrbCanvas.style.width = sizeCss + "px";
+  startOrbCanvas.style.height = sizeCss + "px";
+  startOrbCanvas.width = Math.floor(sizeCss * DPR);
+  startOrbCanvas.height = Math.floor(sizeCss * DPR);
+  startOrbCtx.setTransform(DPR,0,0,DPR,0,0);
+}
+resizeStartOrb();
+addEventListener("resize", resizeStartOrb);
+
+let __startOrbT0 = performance.now();
+function drawStartOrbLoop(){
+  if(!startOrbCanvas || !startOrbCtx) return;
+  // Stop drawing once the experience has started or start screen is hidden
+  if (started || !startScreen || startScreen.style.display === "none") return;
+
+  const t = (performance.now() - __startOrbT0) / 1000;
+  const w = startOrbCanvas.width / DPR;
+  const h = startOrbCanvas.height / DPR;
+
+  startOrbCtx.clearRect(0,0,w,h);
+
+  const cx = w * 0.5;
+  const cy = h * 0.5;
+  const r  = Math.min(w,h) * 0.30;
+
+  // Gentle pulse so it feels alive but not busy
+  const pulse = 1 + 0.06*Math.sin(t*1.35) + 0.02*Math.sin(t*0.62 + 1.7);
+
+  // Use Orby’s existing renderer so it matches the in-game look
+  drawOrby(startOrbCtx, cx, cy, r, t, 0.15, 0.5, pulse, false, 0, [84,255,209]);
+
+  requestAnimationFrame(drawStartOrbLoop);
+}
+requestAnimationFrame(drawStartOrbLoop);
+// --------------------------------------------------------------------
+
+let started = false;
+
+function startExperience(){
+  if (started) return;
+  started = true;
+
+  // Center Orby at start (so it doesn't begin on the left)
+  try{
+    player.x = W * 0.5;
+    player.y = H * 0.5;
+    player.dx = 0; player.dy = 0;
+    player.vx = 0; player.vy = 0;
+  }catch(_){ }
+
+// Fade out start screen
+  if (startScreen){
+    startScreen.style.opacity = "0";
+    startScreen.style.pointerEvents = "none";
+    setTimeout(()=>{ startScreen.style.display = "none";
+    scheduleMenuAutoHide(); }, 280);
+  }
+
+  // First user gesture should unlock audio + enable the instrument
+  try{ ensureAC(); }catch(_){}
+  try{ hideOverlay(); }catch(_){}
+  try{ showToast("READY"); }catch(_){}
+}
+
+if (startScreen){
+  startScreen.addEventListener("pointerdown", ()=>{ startExperience(); }, {passive:true});
+}
+function hideOverlay(){ overlay.style.display = "none"; }
+
+const songStatusEl = document.getElementById("songStatus");
+function setSongStatus(t){ songStatusEl.textContent = t; }
+
+const nowPlayingLine = document.getElementById("nowPlayingLine");
+const bpmReadout = document.getElementById("bpmReadout");
+const rootReadout = document.getElementById("rootReadout");
+const movingReadout = document.getElementById("movingReadout");
+
+const spdReadout = document.getElementById("spdReadout");
+
+let orbSpeed = 1.00;
+const ORB_SPEED_MIN = 0.50;
+const ORB_SPEED_MAX = 2.50;
+const ORB_SPEED_STEP = 0.05;
+
+function setOrbSpeed(v, source="user"){
+  orbSpeed = clamp(v, ORB_SPEED_MIN, ORB_SPEED_MAX);
+  if (spdReadout) spdReadout.textContent = orbSpeed.toFixed(2) + "×";
+  if (source === "user") showToast("SPD " + orbSpeed.toFixed(2) + "×");
+}
+const pulseDot = document.getElementById("pulseDot");
+
+const fieldPulse = document.getElementById("fieldPulse");
+function triggerFieldPulse(strength = 0.9){
+  if (!fieldPulse) return;
+  // Use Orby position as the pulse origin
+  const x = (W > 0) ? (player.x / W) : 0.5;
+  const y = (H > 0) ? (player.y / H) : 0.5;
+  fieldPulse.style.setProperty("--fp-x", (x * 100).toFixed(2) + "%");
+  fieldPulse.style.setProperty("--fp-y", (y * 100).toFixed(2) + "%");
+  fieldPulse.style.opacity = String(clamp(strength, 0.15, 1));
+
+  // Restart animation reliably
+  fieldPulse.classList.remove("pulse");
+  // Force reflow
+  void fieldPulse.offsetWidth;
+  fieldPulse.classList.add("pulse");
+
+  // Fade back to zero after the animation finishes
+  clearTimeout(triggerFieldPulse._t);
+  triggerFieldPulse._t = setTimeout(()=>{
+    fieldPulse.style.opacity = "0";
+  }, 720);
+}
+
+
+let movingForUI = false;
+function updateNowPlaying(){
+  nowPlayingLine.textContent =
+    `${HARMONY_LABELS[musicState.harmonyMode]} • ${RHYTHM_LABELS[musicState.rhythmMode]} • ${TEXTURE_LABELS[musicState.textureMode]}`;
+  bpmReadout.textContent = String(Math.round(bpm));
+  rootReadout.textContent = midiToName(rootMidi);
+  movingReadout.textContent = movingForUI ? "Moving" : "Still";
+  if (spdReadout) spdReadout.textContent = orbSpeed.toFixed(2) + "×";
+}
+
+/* --------------------------------------------------------------------
+   BPM CONTROLS
+-------------------------------------------------------------------- */
+const bpmInput  = document.getElementById("bpmInput");
+const bpmSlider = document.getElementById("bpmSlider");
+const bpmLockEl = document.getElementById("bpmLock");
+const bpmTapBtn = document.getElementById("bpmTapBtn");
+
+function syncBpmUI(){
+  if (!bpmInput || !bpmSlider || !bpmLockEl) return;
+  // don't fight the user while typing
+  if (document.activeElement !== bpmInput){
+    bpmInput.value = String(Math.round(bpm));
+  }
+  bpmSlider.value = String(Math.round(bpm));
+  bpmLockEl.checked = !!bpmLocked;
+}
+syncBpmUI();
+
+bpmLockEl.addEventListener("change", ()=>{
+  bpmLocked = !!bpmLockEl.checked;
+  syncBpmUI();
+  showToast(bpmLocked ? "BPM locked" : "BPM unlocked");
+});
+
+function applyUserBpm(v){
+  ensureAC(); hideOverlay();
+  setBpm(v, "user");
+  showToast("BPM " + Math.round(bpm));
+}
+
+bpmInput.addEventListener("change", ()=> applyUserBpm(bpmInput.value));
+bpmInput.addEventListener("keydown", (e)=>{
+  if (e.key === "Enter"){
+    e.preventDefault();
+    applyUserBpm(bpmInput.value);
+    bpmInput.blur();
+  }
+});
+
+bpmSlider.addEventListener("input", ()=> applyUserBpm(bpmSlider.value));
+
+let tapTimes = [];
+bpmTapBtn.addEventListener("click", ()=>{
+  ensureAC(); hideOverlay();
+  const now = performance.now();
+  tapTimes.push(now);
+  // Keep last 8 taps
+  tapTimes = tapTimes.slice(-8);
+  if (tapTimes.length >= 4){
+    const intervals = [];
+    for (let i = 1; i < tapTimes.length; i++) intervals.push(tapTimes[i] - tapTimes[i-1]);
+    // Use median interval for stability
+    intervals.sort((a,b)=>a-b);
+    const med = intervals[Math.floor(intervals.length/2)];
+    const nextBpm = clamp(60000 / med, 40, 200);
+    applyUserBpm(nextBpm);
+  } else {
+    showToast("Tap " + (4 - tapTimes.length) + " more...");
+  }
+});
+
+/* --------------------------------------------------------------------
+   TOAST
+-------------------------------------------------------------------- */
+let toastTimer = null;
+function showToast(msg){
+  const el = document.getElementById("overlayMsg");
+  if (!el) return;
+  el.innerHTML = msg;
+  el.style.display = "block";
+  el.style.opacity = "0.96";
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{
+    el.style.display = "none";
+  }, 900);
+}
+
+updateNowPlaying();
+
+/* --------------------------------------------------------------------
+   BREATH + PRESETS
+-------------------------------------------------------------------- */
+function breatheSoft(){
+  // Visual breath pulse (calm)
+  triggerFieldPulse(0.45);
+
+  drumEnergy = Math.max(0.18, drumEnergy * 0.55);
+  setBpm(Math.max(78, Math.round(bpm * 0.92)), 'system');
+  musicState.harmonyMode = 2;
+  musicState.rhythmMode  = 5;
+  musicState.textureMode = 8;
+  setChordFromHarmonyMode();
+  
+updateNowPlaying();
+}
+
+/* --------------------------------------------------------------------
+   BREATH (HARD STOP) — literal pause + heartbeat pulse
+-------------------------------------------------------------------- */
+let breathMode = false;
+let breathUntil = 0;
+let breathPulseTimer = null;
+
+// "0 = silence" behavior: hold silence until user moves again
+let silenceHold = false;
+let breathReleaseTimer = null;
+
+function releaseSilence(reason){
+  // Called when user starts moving after a hard-stop breath/silence.
+  silenceHold = false;
+  breathMode = false;
+  if (breathReleaseTimer){ clearTimeout(breathReleaseTimer); breathReleaseTimer = null; }
+  try{
+    const t = AC.currentTime;
+    masterGain.gain.cancelScheduledValues(t);
+    masterGain.gain.setTargetAtTime(0.42, t, 0.04);
+  }catch(_){}
+  if (reason) showToast(reason);
+  updateNowPlaying();
+}
+
+function stopEverythingNow(){
+  // Stop schedulers / layers
+  autoDrums = false;
+
+  if (boomOn){ boomOn = false; stopBoom(); }
+  if (clickOn){ clickOn = false; stopClick(); }
+
+  // Stop held/rolling hats + song sequencer
+  stopHatRoll();
+  stopSong();
+
+  // Zero motion immediately
+  player.dx = 0; player.dy = 0;
+  player.vx = 0; player.vy = 0;
+
+  refreshTouchLabels();
+  updateNowPlaying();
+}
+
+function breathe(){
+  ensureAC(); hideOverlay();
+
+  // Enter breath mode (hard stop + one heartbeat pulse)
+  breathMode = true;
+  breathUntil = performance.now() + 1600;
+
+  
+  
+  silenceHold = true;
+silenceHold = true;
+stopEverythingNow();
+
+  // Mute fast (silence is part of the instrument)
+  try{
+    const t = AC.currentTime;
+    masterGain.gain.cancelScheduledValues(t);
+    masterGain.gain.setTargetAtTime(0.0001, t, 0.015);
+  }catch(_){}
+
+  // ONE pulse: visual + one deep boom
+  try{
+    triggerFieldPulse(0.95);
+  }catch(_){}
+  try{
+    const dot = document.getElementById("pulseDot");
+    if (dot){
+      dot.style.transform = "scale(1.45)";
+      setTimeout(()=>{ dot.style.transform = "scale(1)"; }, 220);
+    }
+  }catch(_){}
+
+  try{
+    // single heartbeat thump (separate from CLICK bed)
+    playBoomKick(0.95, AC.currentTime + 0.02);
+  }catch(_){}
+
+  showToast("BREATHE");
+
+  // Ensure no multi-pulse loop survives older builds
+  if (breathPulseTimer){ clearInterval(breathPulseTimer); breathPulseTimer = null; }
+
+  if (breathReleaseTimer){ clearTimeout(breathReleaseTimer); breathReleaseTimer = null; }
+  // Let the user "take a second" with motion frozen, but keep silence until movement.
+  breathReleaseTimer = setTimeout(()=>{
+    breathMode = false; // motion can resume after a short breath window
+  }, 1000);
+}
+
+const PRESETS = {
+  drift:  { h:1, r:4, t:8, bpm:[78,92],  flow:false, auto:false, energy:0.40 },
+  ritual: { h:3, r:5, t:7, bpm:[86,102], flow:false, auto:false, energy:0.55 },
+  night:  { h:2, r:4, t:9, bpm:[72,88],  flow:false, auto:false, energy:0.36 },
+  flight: { h:3, r:6, t:8, bpm:[96,118], flow:true,  auto:false, energy:0.62 },
+};
+function applyPreset(key){
+  const p = PRESETS[key];
+  if (!p) return;
+  musicState.harmonyMode = p.h;
+  musicState.rhythmMode  = p.r;
+  musicState.textureMode = p.t;
+  drumEnergy = p.energy;
+  setBpm(Math.round(p.bpm[0] + (p.bpm[1]-p.bpm[0]) * rng()), 'system');
+  autoDrums = !!p.auto;
+  if (!!p.flow !== flowMode) toggleFlowMode(); // keeps UI in sync
+  setChordFromHarmonyMode();
+  playPadChord({ accent:true });
+  updateNowPlaying();
+  refreshTouchLabels();
+  setActivePreset(key);
+}
+
+function setActivePreset(key){
+  try{
+    document.querySelectorAll(".preset").forEach(b=>{
+      const on = (b.dataset.preset === key);
+      
+setActivePreset("drift");
+b.classList.toggle("active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }catch(_){}
+}
+document.querySelectorAll(".preset").forEach(btn=>{
+  btn.addEventListener("click", (e)=>{
+    e.preventDefault();
+    ensureAC(); hideOverlay();
+    applyPreset(btn.dataset.preset);
+      setActivePreset(btn.dataset.preset);
+    });
+});
+
+/* --------------------------------------------------------------------
+   TOUCH CONTROLS
+-------------------------------------------------------------------- */
+const joyWrap = document.getElementById("joyWrap");
+const joyKnob = document.getElementById("joyKnob");
+let joyPointerId = null;
+let joyCX=0, joyCY=0;
+const JOY_RADIUS = 60;
+const JOY_DEADZONE = 10;
+
+function setJoyKnob(dx,dy){
+  joyKnob.style.transform = `translate(${dx * JOY_RADIUS}px, ${dy * JOY_RADIUS}px)`;
+}
+function setMoveFromVector(vx, vy){
+  // Allow touch/joystick movement to break out of a breath/silence immediately
+  const mag = Math.hypot(vx, vy);
+  const isIntentMove = mag >= JOY_DEADZONE;
+
+  if (isIntentMove && (breathMode || silenceHold)){
+    releaseSilence(null);
+  }
+
+  if (breathMode) return;
+  if (flowMode) return;
+
+  if (!isIntentMove){
+    player.dx = 0; player.dy = 0;
+    setJoyKnob(0,0);
+    return;
+  }
+
+  const nx = vx / mag, ny = vy / mag;
+  player.dx = (Math.abs(nx) < 0.35) ? 0 : (nx > 0 ? 1 : -1);
+  player.dy = (Math.abs(ny) < 0.35) ? 0 : (ny > 0 ? 1 : -1);
+  setJoyKnob(clamp(vx/JOY_RADIUS,-1,1), clamp(vy/JOY_RADIUS,-1,1));
+}
+
+joyWrap.addEventListener("pointerdown", (e)=>{
+  ensureAC(); hideOverlay();
+  if (document.activeElement && document.activeElement.tagName === "INPUT") return;
+  joyPointerId = e.pointerId;
+  joyWrap.setPointerCapture(joyPointerId);
+  const r = joyWrap.getBoundingClientRect();
+  joyCX = r.left + r.width/2;
+  joyCY = r.top  + r.height/2;
+  const vx = e.clientX - joyCX;
+  const vy = e.clientY - joyCY;
+  setMoveFromVector(vx, vy);
+});
+joyWrap.addEventListener("pointermove", (e)=>{
+  if (joyPointerId !== e.pointerId) return;
+  const vx = e.clientX - joyCX;
+  const vy = e.clientY - joyCY;
+  const mag = Math.hypot(vx, vy) || 1;
+  const scale = Math.min(1, JOY_RADIUS / mag);
+  setMoveFromVector(vx*scale, vy*scale);
+});
+function joyRelease(){
+  if (joyPointerId === null) return;
+  try{ joyWrap.releasePointerCapture(joyPointerId); }catch(_){}
+  joyPointerId = null;
+  player.dx = 0; player.dy = 0;
+  setJoyKnob(0,0);
+}
+joyWrap.addEventListener("pointerup", joyRelease);
+joyWrap.addEventListener("pointercancel", joyRelease);
+joyWrap.addEventListener("lostpointercapture", joyRelease);
+
+const tcDrum   = document.getElementById("tcDrum");
+const tcAuto   = document.getElementById("tcAuto");
+const tcKick   = document.getElementById("tcKick");
+const tcSnare  = document.getElementById("tcSnare");
+const tcHat    = document.getElementById("tcHat");
+const tcBeep   = document.getElementById("tcBeep");
+const tcBoom   = document.getElementById("tcBoom");
+const tcClick  = document.getElementById("tcClick");
+const tcFlow   = document.getElementById("tcFlow");
+const tcBreath = document.getElementById("tcBreath");
+const tcH      = document.getElementById("tcH");
+const tcR      = document.getElementById("tcR");
+const tcT      = document.getElementById("tcT");
+const tcPanel  = document.getElementById("tcPanel");
+
+
+const tcSpdDown = document.getElementById("tcSpdDown");
+const tcSpdUp   = document.getElementById("tcSpdUp");
+function refreshTouchLabels(){
+  tcAuto.textContent = autoDrums ? "AUTO✓" : "AUTO";
+  tcBoom.textContent = boomOn ? "BOOM✓" : "BOOM";
+  tcClick.textContent = clickOn ? "CLICK✓" : "CLICK";
+  tcFlow.textContent = flowMode ? "FLOW✓" : "FLOW";
+}
+refreshTouchLabels();
+
+
+tcDrum.addEventListener("pointerdown", (e)=>{ e.preventDefault(); ensureAC(); hideOverlay(); fireSpaceHit(); });
+
+tcKick.addEventListener("pointerdown", (e)=>{ e.preventDefault(); ensureAC(); hideOverlay(); playSoftKick(1.0); });
+tcSnare.addEventListener("pointerdown", (e)=>{ e.preventDefault(); ensureAC(); hideOverlay(); playSoftSnare(0.95); });
+tcHat.addEventListener("pointerdown", (e)=>{ e.preventDefault(); ensureAC(); hideOverlay(); playSoftHat(0.9); });
+tcBeep.addEventListener("pointerdown", (e)=>{ e.preventDefault(); ensureAC(); hideOverlay(); playBeap(1.0); });
+
+tcAuto.addEventListener("pointerdown", (e)=>{ e.preventDefault(); ensureAC(); hideOverlay(); autoDrums = !autoDrums; refreshTouchLabels(); updateNowPlaying(); });
+tcBoom.addEventListener("pointerdown", (e)=>{ e.preventDefault(); ensureAC(); hideOverlay(); toggleBoom(); refreshTouchLabels(); updateNowPlaying(); });
+tcClick.addEventListener("pointerdown", (e)=>{ e.preventDefault(); ensureAC(); hideOverlay(); toggleClick(); refreshTouchLabels(); updateNowPlaying(); });
+
+tcFlow.addEventListener("pointerdown", (e)=>{ e.preventDefault(); ensureAC(); hideOverlay(); toggleFlowMode(); });
+tcBreath.addEventListener("pointerdown", (e)=>{ e.preventDefault(); ensureAC(); hideOverlay(); breathe(); });
+
+
+// Touch SPD controls
+if (tcSpdDown) tcSpdDown.addEventListener("pointerdown", (e)=>{ e.preventDefault(); ensureAC(); hideOverlay(); setOrbSpeed(orbSpeed - ORB_SPEED_STEP, "user"); updateNowPlaying(); });
+if (tcSpdUp)   tcSpdUp.addEventListener("pointerdown", (e)=>{ e.preventDefault(); ensureAC(); hideOverlay(); setOrbSpeed(orbSpeed + ORB_SPEED_STEP, "user"); updateNowPlaying(); });
+
+function cycleMode(which){
+  if (which === "H") musicState.harmonyMode = (musicState.harmonyMode % 3) + 1;
+  else if (which === "R"){
+    const order = [4,5,6];
+    musicState.rhythmMode = order[(order.indexOf(musicState.rhythmMode)+1)%order.length];
+  } else if (which === "T"){
+    const order = [7,8,9];
+    musicState.textureMode = order[(order.indexOf(musicState.textureMode)+1)%order.length];
+  }
+  setChordFromHarmonyMode();
+  updateNowPlaying();
+}
+tcH.addEventListener("pointerdown", (e)=>{ e.preventDefault(); ensureAC(); hideOverlay(); cycleMode("H"); });
+tcR.addEventListener("pointerdown", (e)=>{ e.preventDefault(); ensureAC(); hideOverlay(); cycleMode("R"); });
+tcT.addEventListener("pointerdown", (e)=>{ e.preventDefault(); ensureAC(); hideOverlay(); cycleMode("T"); });
+tcPanel.addEventListener("pointerdown", (e)=>{ e.preventDefault(); panel.classList.toggle("collapsed"); });
+
+canvas.addEventListener("pointerdown", ()=>{ ensureAC(); hideOverlay(); }, {passive:true});
+
+/* --------------------------------------------------------------------
+   DRUM PERFORMANCE (SPACE) - Phase 2 Enhanced
+-------------------------------------------------------------------- */
+let spaceDown = false;
+let spaceHoldActive = false;
+let spaceHoldTimer = null;
+let rollTimer = null;
+
+// Phase 2: Double-tap and hold duration tracking
+let lastSpaceTapTime = 0;
+let spaceDownTime = 0;
+const DOUBLE_TAP_THRESHOLD = 280; // ms
+
+function secondsPerBeat(){ return 60 / bpm; }
+function quantizedTime(subdiv = 4, lookahead = 0.008){
+  const t = AC.currentTime + lookahead;
+  const step = secondsPerBeat() / subdiv;
+  return Math.ceil(t / step) * step;
+}
+
+function fireSpaceHit(){
+  if (breathMode) return;
+  if (!AC) return;
+  const r = musicState.rhythmMode;
+  const base = 0.85 + Math.min(0.35, drumEnergy * 0.25);
+  const t = quantizedTime(4);
+
+  // Check for double-tap
+  const now = performance.now();
+  const timeSinceLastTap = now - lastSpaceTapTime;
+  lastSpaceTapTime = now;
+
+  if (timeSinceLastTap < DOUBLE_TAP_THRESHOLD){
+    // Double-tap detected! Play snare fill
+    playSnareRoll(base);
+    showToast("◉◉ Fill!");
+    return;
+  }
+
+  // Normal single tap
+  playSoftKick(base, t);
+  if (r === 4){
+    if (Math.random() < 0.35) playSoftHat(0.75, t);
+    return;
+  }
+  if (r === 5){
+    playSoftHat(0.90, t);
+    if (Math.random() < 0.35) playSoftSnare(0.85, t);
+    return;
+  }
+  playSoftHat(1.00, t);
+  if (Math.random() < 0.55) playSoftClap(1.00, t);
+  else playSoftSnare(0.95, t);
+}
+
+function startHatRoll(){
+  if (!AC || spaceHoldActive) return;
+  spaceHoldActive = true;
+  const baseInterval = secondsPerBeat() / 4;
+  rollTimer = setInterval(()=>{
+    if (!spaceDown) return;
+    const intensity = (musicState.rhythmMode === 6) ? 0.65 : 0.55;
+    playSoftHat(intensity);
+  }, Math.max(45, baseInterval * 1000));
+}
+
+function stopHatRoll(){
+  spaceHoldActive = false;
+  if (rollTimer){ clearInterval(rollTimer); rollTimer = null; }
+}
+
+// Phase 2: Check if should play crash on release
+function handleSpaceRelease(){
+  const holdDuration = performance.now() - spaceDownTime;
+
+  // If held for more than 400ms, play crash on release
+  if (holdDuration > 400 && spaceHoldActive){
+    playCrash(Math.min(1.2, 0.7 + holdDuration / 1000));
+    showToast("💥 Crash!");
+  }
+
+  spaceDown = false;
+  if (spaceHoldTimer){ clearTimeout(spaceHoldTimer); spaceHoldTimer = null; }
+  stopHatRoll();
+}
+
+/* --------------------------------------------------------------------
+   KEYBOARD
+-------------------------------------------------------------------- */
+document.addEventListener("keydown", (e)=>{
+  // If the start screen is present, let the start-screen hooks own Enter + intro behavior.
+  if (!started){
+    if (document.getElementById("startScreen")) return;
+
+    if (e.key === "Enter"){
+      e.preventDefault();
+      startExperience();
+    }
+    return;
+  }
+
+  ensureAC(); hideOverlay();
+
+  // Enter = intro soundtrack toggle during gameplay (play/pause without touching the start screen)
+  if ((e.key === "Enter" || e.key === "0") && !e.repeat){
+    e.preventDefault();
+
+    // 0 = OFF ONLY (force stop) + visual anchor pulse
+  if (e.key === "0"){
+    if (__intro && __intro.running){
+      stopIntroEthereal();
+    }
+
+    // restore anchor visuals (no audio toggle)
+    if (typeof triggerFieldPulse === "function"){
+      triggerFieldPulse();
+    }
+    if (typeof pulseSphere === "function"){
+      pulseSphere(1.0);
+    }
+
+    return;
+  }
+
+    // Enter = toggle on/off
+    if (__intro && __intro.running){
+      stopIntroEthereal();
+    }else{
+      startIntroEthereal(true);
+    }
+    return;
+  }
+
+  if (breathMode){
+    const isMoveKey = (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "w" || e.key === "a" || e.key === "s" || e.key === "d");
+    if (isMoveKey){
+      releaseSilence(null);
+    } else {
+      e.preventDefault();
+      return;
+    }
+  }
+
+  // BPM quick adjust: Shift+↑ / Shift+↓
+  if (e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")){
+    e.preventDefault();
+    const delta = (e.key === "ArrowUp") ? 2 : -2;
+    setBpm(bpm + delta, "user");
+    showToast("BPM " + Math.round(bpm));
+    return;
+  }
+
+  // SPD quick adjust: [ / ]
+  if (!e.ctrlKey && !e.metaKey && (e.key === "[" || e.key === "]")){
+    e.preventDefault();
+    const delta = (e.key === "]") ? ORB_SPEED_STEP : -ORB_SPEED_STEP;
+    setOrbSpeed(orbSpeed + delta, "user");
+    updateNowPlaying();
+    return;
+  }
+
+  if (e.code === "Space"){
+    e.preventDefault();
+    if (!spaceDown){
+      spaceDown = true;
+      spaceDownTime = performance.now(); // Track when space was pressed
+      fireSpaceHit();
+      spaceHoldTimer = setTimeout(()=>{ if (spaceDown) startHatRoll(); }, 260);
+    }
+    return;
+  }
+  if (e.key === "b" || e.key === "B"){
+    e.preventDefault();
+    autoDrums = !autoDrums;
+    refreshTouchLabels();
+    updateNowPlaying();
+    return;
+  }
+  if (e.key === "f" || e.key === "F"){
+    e.preventDefault();
+    toggleFlowMode();
+    return;
+  }
+  if (e.key === "h" || e.key === "H"){
+    e.preventDefault();
+    toggleBoom();
+    refreshTouchLabels();
+    updateNowPlaying();
+    return;
+  }
+  if (e.key === "n" || e.key === "N"){
+    e.preventDefault();
+    toggleClick();
+    refreshTouchLabels();
+    updateNowPlaying();
+    return;
+  }
+  if (e.key === "x" || e.key === "X"){
+    e.preventDefault();
+    playBeap(1.0);
+    return;
+  }
+
+
+    if (e.code === "KeyC" || e.key === "c" || e.key === "C"){
+    e.preventDefault();
+    toggleClone();
+    return;
+  }
+
+// Movement (always enabled; Flow mode should not disable control)
+{
+  const isArrow = (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight");
+  const isWASD = (e.code === "KeyW" || e.code === "KeyA" || e.code === "KeyS" || e.code === "KeyD" ||
+                 e.key === "w" || e.key === "a" || e.key === "s" || e.key === "d" ||
+                 e.key === "W" || e.key === "A" || e.key === "S" || e.key === "D");
+
+  const isMoveKey = isArrow || isWASD;
+  if (isMoveKey){
+    e.preventDefault();
+
+    // If we were holding silence (0/Breathe), moving resumes sound immediately
+    if (silenceHold || breathMode){ releaseSilence(null); }
+
+    const hasClone = !!clone;
+    const routesToClone = hasClone && isWASD;
+    const t = routesToClone ? clone : player;
+
+    const up    = (e.key === "ArrowUp"    || e.code === "KeyW" || e.key === "w" || e.key === "W");
+    const down  = (e.key === "ArrowDown"  || e.code === "KeyS" || e.key === "s" || e.key === "S");
+    const left  = (e.key === "ArrowLeft"  || e.code === "KeyA" || e.key === "a" || e.key === "A");
+    const right = (e.key === "ArrowRight" || e.code === "KeyD" || e.key === "d" || e.key === "D");
+
+    if (up) t.dy = -1;
+    if (down) t.dy =  1;
+    if (left) t.dx = -1;
+    if (right) t.dx = 1;
+
+    // No early return: number keys, etc. can still be handled below.
+  }
+}
+
+  if (e.key >= "0" && e.key <= "9"){
+    e.preventDefault();
+    const k = parseInt(e.key, 10);
+    // Visual pulse: numbers acknowledge the field
+    if (k === 0) triggerFieldPulse(0.55);
+    else if (k <= 3) triggerFieldPulse(0.70);
+    else if (k <= 6) triggerFieldPulse(0.82);
+    else triggerFieldPulse(0.95);
+
+    if (k === 0){ breathe(); return; }
+    if (k >= 1 && k <= 3) musicState.harmonyMode = k;
+    if (k >= 4 && k <= 6) musicState.rhythmMode  = k;
+    if (k >= 7 && k <= 9) musicState.textureMode = k;
+    setChordFromHarmonyMode();
+    updateNowPlaying();
+  }
+});
+
+document.addEventListener("keyup", (e)=>{
+  if (e.code === "Space"){
+    e.preventDefault();
+    handleSpaceRelease(); // Phase 2: Use enhanced release handler
+    return;
+  }
+  // Movement key release (always enabled; mirrors keydown routing)
+{
+  const isArrow = (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight");
+  const isWASD = (e.code === "KeyW" || e.code === "KeyA" || e.code === "KeyS" || e.code === "KeyD" ||
+                 e.key === "w" || e.key === "a" || e.key === "s" || e.key === "d" ||
+                 e.key === "W" || e.key === "A" || e.key === "S" || e.key === "D");
+
+  const isMoveKey = isArrow || isWASD;
+  if (isMoveKey){
+    e.preventDefault();
+    const hasClone = !!clone;
+    const routesToClone = hasClone && isWASD;
+    const t = routesToClone ? clone : player;
+
+    const up    = (e.key === "ArrowUp"    || e.code === "KeyW" || e.key === "w" || e.key === "W");
+    const down  = (e.key === "ArrowDown"  || e.code === "KeyS" || e.key === "s" || e.key === "S");
+    const left  = (e.key === "ArrowLeft"  || e.code === "KeyA" || e.key === "a" || e.key === "A");
+    const right = (e.key === "ArrowRight" || e.code === "KeyD" || e.key === "d" || e.key === "D");
+
+    if (up && t.dy < 0) t.dy = 0;
+    if (down && t.dy > 0) t.dy = 0;
+    if (left && t.dx < 0) t.dx = 0;
+    if (right && t.dx > 0) t.dx = 0;
+  }
+}
+});
+
+/* --------------------------------------------------------------------
+   HUD BUTTON HANDLERS (Drift / Anchor / Composer)
+-------------------------------------------------------------------- */
+const seedInput = document.getElementById("seedInput");
+const patternInput = document.getElementById("patternInput");
+
+const driftBtn = document.getElementById("driftBtn");
+const anchorBtn = document.getElementById("anchorBtn");
+const revealComposerBtn = document.getElementById("revealComposerBtn");
+const composerPanel = document.getElementById("composerPanel");
+
+function softDrift(){
+  // "Drift" = gentle world reshape (keeps it musical, avoids sudden jumps)
+  const s = Math.floor(Math.random() * 999999999);
+  seedInput.value = s;
+
+  // Keep the seed concept internally, but treat it as a field-state knob.
+  applySeed(s);
+
+  // Nudge modes instead of hard switching
+  musicState.harmonyMode = 1 + Math.floor(rng() * 3);
+  musicState.rhythmMode  = [4,5,6][Math.floor(rng() * 3)];
+  musicState.textureMode = [7,8,9][Math.floor(rng() * 3)];
+
+  // Smooth tempo + energy drift (avoid huge shocks)
+  setBpm(clamp(bpm + (rng() - 0.5) * 14, 72, 118), 'system');
+  drumEnergy = clamp(drumEnergy + (rng() - 0.5) * 0.22, 0.22, 0.82);
+
+  setChordFromHarmonyMode();
+  playPadChord({ accent:true });
+  updateNowPlaying();
+}
+
+function anchor(){
+  // "Anchor" = soft breath reset + pad bloom (stabilize)
+  breatheSoft();
+  playPadChord({ accent:true });
+}
+
+driftBtn.addEventListener("click", ()=>{
+  ensureAC(); hideOverlay();
+  softDrift();
+});
+
+anchorBtn.addEventListener("click", ()=>{
+  ensureAC(); hideOverlay();
+  anchor();
+});
+
+revealComposerBtn.addEventListener("click", (e)=>{
+  e.preventDefault(); e.stopPropagation();
+  const show = composerPanel.style.display !== "block";
+  composerPanel.style.display = show ? "block" : "none";
+  if (show) panel.scrollTop = panel.scrollHeight;
+});
+
+// Composer controls
+document.getElementById("bloomBtn").addEventListener("click", ()=>{
+  ensureAC();
+  const text = (patternInput.value || "").trim();
+  if (!text){
+    setChordFromHarmonyMode();
+    playPadChord({ accent:true });
+    return;
+  }
+  const digits = (text.match(/\d/g) || []).slice(0, 10).map(d => parseInt(d,10));
+  if (!digits.length){
+    setChordFromHarmonyMode();
+    playPadChord({ accent:true });
+    return;
+  }
+  const degs = [];
+  digits.forEach(d=>{
+    const semi = pentMinorIntervals[d % pentMinorIntervals.length];
+    if (!degs.includes(semi)) degs.push(semi);
+  });
+  chordDegrees = degs.slice(0, 5);
+  playPadChord({ accent:true });
+});
+
+document.getElementById("playSongBtn").addEventListener("click", ()=> startSongFromPattern(patternInput.value));
+document.getElementById("stopSongBtn").addEventListener("click", ()=> stopSong());
+
+/* --------------------------------------------------------------------
+   GAME LOOP — MOVEMENT → MELODY + SONG CLOCK + PULSE
+-------------------------------------------------------------------- */
+let lastTime = performance.now();
+let moveTimer = 0;
+let padTimer = 0;
+let moveStepCount = 0;
+
+// Pulse visuals
+let beatPhase = 0;
+function rhythmDensity(){
+  const r = musicState.rhythmMode;
+  if (r === 4) return 0.45;
+  if (r === 5) return 0.80;
+  return 1.15;
+}
+function textureGlow(){
+  const t = musicState.textureMode;
+  if (t === 7) return 0.95;
+  if (t === 8) return 1.05;
+  return 1.15;
+}
+
+function loop(now){
+  requestAnimationFrame(loop);
+  const dt = (now - lastTime) / 1000;
+  lastTime = now;
+
+  if (breathMode){
+    // Freeze input + motion while breathing
+    player.dx = 0; player.dy = 0;
+    player.vx = 0; player.vy = 0;
+    if (clone){
+      clone.dx = 0; clone.dy = 0;
+      clone.vx = 0; clone.vy = 0;
+    }
+  }
+
+  // Song clock
+  if (songActive && songSections && songSections.length){
+    cellTimeLeft -= dt;
+    if (cellTimeLeft <= 0){
+      currentCellIndex++;
+      if (currentCellIndex >= songSections[currentSectionIndex].length){
+        currentCellIndex = 0;
+        currentSectionIndex = (currentSectionIndex + 1) % songSections.length;
+      }
+      applySongCell(songSections[currentSectionIndex][currentCellIndex]);
+      cellTimeLeft = computeCellDuration();
+      setSongStatus(`Song: playing — section ${currentSectionIndex+1}/${songSections.length}, cell ${currentCellIndex+1}/${songSections[currentSectionIndex].length}`);
+    }
+  }
+
+  // Move
+  const prevX = player.x, prevY = player.y;
+  const prevCX = clone ? clone.x : 0, prevCY = clone ? clone.y : 0;
+  if (breathMode){
+    // Hold position (no drift) during breath
+    player.dx = 0; player.dy = 0;
+    player.vx = 0; player.vy = 0;
+    if (clone){
+      clone.dx = 0; clone.dy = 0;
+      clone.vx = 0; clone.vy = 0;
+    }
+  }
+
+  if (flowMode){
+    flowT += dt;
+
+    const cx = W * 0.5 + Math.sin(flowT * flowParams.drift) * W * 0.08;
+    const cy = H * 0.5 + Math.cos(flowT * flowParams.drift * 0.9) * H * 0.07;
+
+    const speedFactor = (0.55 + (Math.min(140, Math.max(70, bpm)) - 70) / 140) * orbSpeed;
+    const ax = flowParams.a * speedFactor;
+    const by = flowParams.b * speedFactor;
+
+    const tx = cx + Math.sin(flowT * ax) * (W * flowParams.rx);
+    const ty = cy + Math.sin(flowT * by + flowParams.phase) * (H * flowParams.ry);
+
+    const k = 10.0, d = 5.5;
+    const fx = (tx - player.x) * k - player.vx * d;
+    const fy = (ty - player.y) * k - player.vy * d;
+
+    player.vx += fx * dt;
+    player.vy += fy * dt;
+
+    const vmax = 260 * speedFactor;
+    const vmag = Math.hypot(player.vx, player.vy);
+    if (vmag > vmax){
+      player.vx = (player.vx / vmag) * vmax;
+      player.vy = (player.vy / vmag) * vmax;
+    }
+
+    player.x += player.vx * dt;
+    player.y += player.vy * dt;
+  } else {
+    const speed = 150 * orbSpeed;
+    player.vx = player.dx * speed;
+    player.vy = player.dy * speed;
+    player.x += player.vx * dt;
+    player.y += player.vy * dt;
+  }
+
+  player.x = Math.max(player.size, Math.min(W - player.size, player.x));
+  player.y = Math.max(player.size, Math.min(H - player.size, player.y));
+
+
+  // Clone movement (manual WASD) — same physics as non-flow player
+  if (clone){
+    const cspeed = 150 * orbSpeed;
+    clone.vx = clone.dx * cspeed;
+    clone.vy = clone.dy * cspeed;
+    clone.x += clone.vx * dt;
+    clone.y += clone.vy * dt;
+
+    clone.x = Math.max(clone.size, Math.min(W - clone.size, clone.x));
+    clone.y = Math.max(clone.size, Math.min(H - clone.size, clone.y));
+  }
+
+
+  // Movement-based rhythm trigger
+  const spb = 60 / bpm;
+  const stepInterval = spb / 2; // eighth pulses
+
+  const speedNow = Math.hypot(player.x - prevX, player.y - prevY) / Math.max(1e-6, dt);
+  const moving = speedNow > 8;
+  const cloneSpeedNow = clone ? (Math.hypot(clone.x - prevCX, clone.y - prevCY) / Math.max(1e-6, dt)) : 0;
+  const cloneMoving = !!clone && cloneSpeedNow > 8;
+
+  // Phase 2: Update movement dynamics for filter and ambient
+  if (!breathMode) updateMovementDynamics(speedNow, dt);
+
+  if (moving !== movingForUI){
+    movingForUI = moving;
+    panel.classList.toggle('moving', movingForUI);
+    updateNowPlaying();
+  }
+
+  moveTimer += dt;
+  padTimer += dt;
+
+  // Phase 2: Track vertical zone for bass/lead decisions
+  const verticalZone = getVerticalZone(player.y, H);
+  const inBassZone = verticalZone < 0.35;    // Bottom 35% of screen
+  const inLeadZone = verticalZone > 0.65;    // Top 35% of screen
+
+  if ((moving || cloneMoving) && moveTimer > stepInterval){
+    moveTimer = 0;
+    let dir = { dx: Math.sign(player.x - prevX), dy: Math.sign(player.y - prevY) };
+    if (dir.dx === 0 && dir.dy === 0) dir = { dx: 0, dy: -1 };
+
+    const eff = Math.min(1.0, drumEnergy * rhythmDensity());
+    const speedIntensity = Math.min(1.2, 0.6 + speedNow / 150); // Phase 2: Speed affects intensity
+
+    if (!breathMode && autoDrums){
+      moveStepCount++;
+      const kickStrength = (musicState.rhythmMode === 4) ? 0.90 : (musicState.rhythmMode === 5) ? 1.02 : 1.08;
+
+      if (moveStepCount % 2 === 1) playSoftKick(kickStrength);
+
+      const layerChance = (musicState.rhythmMode === 4) ? (eff * 0.35) :
+                          (musicState.rhythmMode === 5) ? (eff * 0.45) : (eff * 0.55);
+      if (Math.random() < layerChance){
+        if (dir.dy !== 0 && Math.random() < 0.55) playSoftSnare(0.88);
+        else playSoftHat(0.78);
+      }
+    }
+
+    setChordFromHarmonyMode();
+
+    // Phase 2: Choose sound layer based on vertical position
+    if (inBassZone && dir.dy >= 0){
+      // In bass zone moving down or horizontal - play bass
+      const bassFreqMult = [1, 1, 1.5, 0.75, 1.25][moveStepCount % 5];
+      playBassNote(bassFreqMult, speedIntensity * 0.8, moveStepCount % 4 === 0);
+      // Still play subtle arp
+      if (Math.random() < 0.4) playArpNote(dir);
+    } else if (inLeadZone && dir.dy <= 0){
+      // In lead zone moving up or horizontal - play lead
+      playLeadNote(dir, speedIntensity);
+      // Still play subtle arp underneath
+      if (Math.random() < 0.5) playArpNote(dir);
+    } else {
+      // Middle zone - normal arp behavior
+      playArpNote(dir);
+      // Occasional bass/lead hints based on direction
+      if (dir.dy > 0 && Math.random() < 0.25){
+        playBassNote(1, speedIntensity * 0.5, false);
+      } else if (dir.dy < 0 && Math.random() < 0.25){
+        playLeadNote(dir, speedIntensity * 0.6);
+      }
+    }
+  }
+    // --- CLONE INFLUENCE (counter-melody, kept tasteful) ---
+    if (cloneMoving){
+      let cdir = { dx: Math.sign(clone.x - prevCX), dy: Math.sign(clone.y - prevCY) };
+      if (cdir.dx === 0 && cdir.dy === 0) cdir = { dx: 0, dy: -1 };
+
+      const cz = getVerticalZone(clone.y, H);
+      const cInLead = cz > 0.65;
+      const cIntensity = Math.min(1.05, 0.45 + cloneSpeedNow / 190) * 0.65; // always softer than player
+
+      // Consonant transposition so it "adds" without clashing:
+      // mid/bottom -> perfect fifth up; top -> octave+fifth sometimes.
+      const shift = cInLead ? (moveStepCount % 4 === 0 ? 12 : 7) : 7;
+
+      // Sparsity controls: never spam; let the player stay the "main voice"
+      const p = cInLead ? 0.48 : 0.58;
+      if (Math.random() < p){
+        if (cInLead){
+          // mostly lead shimmer up top
+          playLeadNote(cdir, cIntensity, shift);
+          if (Math.random() < 0.30) playArpNote(cdir, 7);
+        }else{
+          // mid/bottom = arpy counterline (still melodic)
+          playArpNote(cdir, shift);
+          if (Math.random() < 0.22) playLeadNote(cdir, cIntensity * 0.8, 7);
+        }
+      }
+    }
+
+
+  // Pad bloom cadence
+  const bars = (musicState.rhythmMode === 4) ? 2 : 1;
+  const padEvery = spb * 4 * bars;
+  if (moving && padTimer > padEvery){
+    padTimer = 0;
+    setChordFromHarmonyMode();
+    playPadChord({ accent: musicState.rhythmMode === 6 });
+  }
+
+  // Pulse (UI + subtle canvas halo)
+  beatPhase += dt / spb;
+  if (beatPhase >= 1) beatPhase -= 1;
+  const pulse = 0.85 + 0.35 * Math.pow(Math.max(0, Math.sin(beatPhase * Math.PI)), 2);
+  pulseDot.style.transform = `scale(${pulse.toFixed(3)})`;
+
+  // Draw
+  // Hard reset canvas state each frame (prevents persistent ghost trails)
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.globalCompositeOperation = "source-over";
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "#000000";
+  ctx.fillRect(0,0,W,H);
+
+  const density = Math.min(chordDegrees.length, 5);
+  const glow = textureGlow();
+  const innerGlow = (0.055 + density * 0.02) * glow;
+  const c = currentSectionColor;
+  // Clear base frame (prevents ghosting / ensures true black)
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0,0,W,H);
+
+  if (BG_GLOW_ENABLED){
+
+  const bg = ctx.createRadialGradient(W/2, H/2, 60, W/2, H/2, W*0.82);
+  bg.addColorStop(0, `rgba(${c.r},${c.g},${c.b},${innerGlow})`);
+  bg.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,W,H);
+  }
+
+  // Phase 2: Enhanced orb visual based on position and active layers
+  const zoneY = getVerticalZone(player.y, H);
+  const speedFactor = Math.min(1, speedNow / 150);
+
+  // Color shifts based on vertical zone
+  // Bottom (bass) = purple/pink, Middle = cyan, Top (lead) = bright cyan/white
+  let orbR, orbG, orbB;
+  if (zoneY < 0.35){
+    // Bass zone - purple/pink tones
+    orbR = 180 + zoneY * 100;
+    orbG = 100 + zoneY * 150;
+    orbB = 220;
+  } else if (zoneY > 0.65){
+    // Lead zone - bright cyan/white
+    const leadFactor = (zoneY - 0.65) / 0.35;
+    orbR = 150 + leadFactor * 105;
+    orbG = 255;
+    orbB = 220 + leadFactor * 35;
+  } else {
+    // Middle zone - standard cyan
+    orbR = 84;
+    orbG = 255;
+    orbB = 209;
+  }
+
+  // Size varies with speed and stillness
+  const activeLayerBoost = ambientDroneActive ? 1.15 : 1;
+  const tNow = performance.now() * 0.001;
+  const orbRGB = [orbR|0, orbG|0, orbB|0];
+
+  const dynamicSize = player.size * (1 + speedFactor * 0.3) * activeLayerBoost;
+  if (TRAIL_ENABLED){
+  // --- TRAIL BUFFER UPDATE (isolated) ---
+    // decay old trail (motion blur persistence)
+    trailCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    trailCtx.globalCompositeOperation = "source-over";
+    trailCtx.fillStyle = "rgba(0,0,0,0.18)";
+    trailCtx.fillRect(0,0,W,H);
+
+    // stamp Orby itself into the trail buffer (soft echo; Orby remains drawn normally below)
+    trailCtx.save();
+    trailCtx.globalCompositeOperation = "lighter";
+    trailCtx.globalAlpha = 0.35;
+    drawOrby(trailCtx, player.x, player.y, dynamicSize*0.96, tNow, speedFactor, zoneY, pulse, ambientDroneActive, stillnessDuration, orbRGB);
+    if (clone){
+      // stamp clone into the same trail buffer
+      drawOrby(trailCtx, clone.x, clone.y, dynamicSize*0.94, tNow, speedFactor, zoneY, pulse, ambientDroneActive, stillnessDuration, orbRGB);
+    }
+    trailCtx.restore();
+} else {
+  // No trail: fully clear buffer each frame (prevents ghost blur)
+  trailCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  trailCtx.clearRect(0,0,W,H);
+}
+// Orby sphere (true-to-app plasma look)
+
+  if (TRAIL_ENABLED){
+  // --- TRAIL: COMPOSITE BUFFER (behind Orby) ---
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    ctx.globalAlpha = 1;
+    ctx.drawImage(trailCanvas, 0, 0);
+    ctx.restore();
+}
+
+// --- ORBY: ABSOLUTE FINAL DRAW (state reset so it never disappears) ---
+  ctx.save();
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+
+  drawOrby(ctx, player.x, player.y, dynamicSize, tNow, speedFactor, zoneY, pulse, ambientDroneActive, stillnessDuration, orbRGB);
+
+  if (clone){
+    // Draw clone on top (same "effects", separate body)
+    drawOrby(ctx, clone.x, clone.y, dynamicSize*0.98, tNow, speedFactor, zoneY, pulse, ambientDroneActive, stillnessDuration, orbRGB);
+  }
+
+  ctx.restore();
+}
+  setChordFromHarmonyMode();
+
+
+// Kick off the render loop
+requestAnimationFrame(loop);
+
+/* --------------------------------------------------------------------
+   UI TOGGLES (v13) — zero-impact on gameplay loop
+   Hotkeys:
+   - U: hide/show HUD
+   - H: help
+   
+-------------------------------------------------------------------- */
+(function(){
+  const panel = document.getElementById("panel");
+  const uiDock = document.getElementById("uiDock");
+  const helpPanel = document.getElementById("helpPanel");
+  const composerPanel = document.getElementById("composerPanel");
+  const touchControls = document.getElementById("touchControls");
+
+  const hideBtn = document.getElementById("hideUiBtn");
+  const dockShowUI = document.getElementById("dockShowUI");
+  const dockToggleHelp = document.getElementById("dockToggleHelp");
+  const dockToggleComposer = document.getElementById("dockToggleComposer");
+  const dockToggleTouch = document.getElementById("dockToggleTouch");
+
+  function setHidden(el, hidden){
+    if (!el) return;
+    el.classList.toggle("isHidden", !!hidden);
+  }
+  function hudHidden(){
+    return panel && panel.classList.contains("uiHidden");
+  }
+  function setHudHidden(hidden){
+    if (!panel || !uiDock) return;
+    panel.classList.toggle("uiHidden", !!hidden);
+    setHidden(uiDock, !hidden);
+    uiDock.setAttribute("aria-hidden", hidden ? "false" : "true");
+  }
+  function toggleHud(){ setHudHidden(!hudHidden()); }
+
+  function toggleHelp(){
+    if (!helpPanel) return;
+    helpPanel.style.display = (helpPanel.style.display === "none" || !helpPanel.style.display) ? "block" : "none";
+  }
+  function toggleComposer(){
+    if (!composerPanel) return;
+    composerPanel.style.display = (composerPanel.style.display === "none" || !composerPanel.style.display) ? "block" : "none";
+  }
+  function toggleTouch(){
+    if (!touchControls) return;
+    const hidden = (touchControls.style.display === "none");
+    touchControls.style.display = hidden ? "flex" : "none";
+  }
+
+  // Button wiring (guarded)
+  if (hideBtn) hideBtn.addEventListener("click", (e)=>{ e.preventDefault(); toggleHud(); });
+  if (dockShowUI) dockShowUI.addEventListener("click", (e)=>{ e.preventDefault(); setHudHidden(false); });
+  if (dockToggleHelp) dockToggleHelp.addEventListener("click", (e)=>{ e.preventDefault(); toggleHelp(); });
+
+  // Keyboard shortcuts (do NOT block gameplay keys)
+  document.addEventListener("keydown", (e)=>{
+    // let existing handler run; we only react to these keys
+    if (e.key === "m" || e.key === "M"){
+      e.preventDefault();
+      toggleHud();
+      return;
+    }
+    if (e.key === "?" || e.key === "/"){
+      e.preventDefault();
+      toggleHelp();
+      return;
+    }
+  }, { capture: true });
+
+  // Default state: HUD visible, dock hidden
+  setHudHidden(false);
+})();
+
+
+
+/* --- START SCREEN HOOKS --- */
+(function(){
+  const start = document.getElementById("startScreen");
+  if (!start) return;
+
+  const subtitleEl = start.querySelector(".startSubtitle");
+  const startBtn = document.getElementById("startBtn");
+
+  let begun = false;
+  function setSubtitle(html){
+    if (subtitleEl) subtitleEl.innerHTML = html;
+  }
+
+  // Best-effort: start the ethereal intro bed immediately for the start screen.
+  // (Browsers may keep AudioContext suspended until a user gesture; once unlocked, it will be audible.)
+  try{ ensureAC(); }catch(e){}
+  try{ startIntroEthereal(false); }catch(e){}
+  setSubtitle('Welcome. Soundtrack is on. Press <span class="keycap">Enter</span> to start.');
+
+
+  function armIntro(){
+    // Unlock audio + start the intro bed (without starting gameplay)
+    try{ ensureAC(); }catch(e){}
+    try{ startIntroEthereal(); }catch(e){}
+    setSubtitle('Welcome. Soundtrack is on. Press <span class="keycap">Enter</span> to start.');
+  }
+
+  function begin(){
+    if (begun) return;
+    begun = true;
+
+    // Stop start-screen intro (if playing)
+    stopIntroEthereal();
+
+    // Unlock + play start blip on the same gesture
+    playStartBlip();
+
+    // Start the actual experience (hooks into existing game loop + input)
+    try{ startExperience(); }catch(e){ console.error(e); }
+
+    start.style.opacity = "0";
+    start.style.pointerEvents = "none";
+    setTimeout(()=>{ try{ start.remove(); }catch(e){} }, 280);
+  }
+
+  // Any first interaction (click/tap/any key) should enable the soundtrack.
+  // Enter specifically starts the game (and stops the soundtrack).
+  addEventListener("keydown", (e)=>{
+    if (begun) return;
+
+    // Prevent page scroll / accidental browser actions while start screen is up.
+    if (e.key === " " || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight"){
+      e.preventDefault();
+    }
+
+    if (e.key === "Enter"){
+      e.preventDefault();
+      begin();
+      return;
+    }
+
+    if (!(__intro && __intro.running)){
+      armIntro();
+    }
+  }, { capture:true });
+
+  addEventListener("pointerdown", ()=>{
+    if (begun) return;
+    if (!(__intro && __intro.running)) armIntro();
+  }, { capture:true });
+
+  if (startBtn){
+    startBtn.addEventListener("click", (e)=>{
+      e.preventDefault();
+      begin();
+    });
+  }
+
+  // Initial hint (no audio until a gesture due to autoplay policies)
+  setSubtitle('Press <span class="keycap">Enter</span> to start. (Audio unlocks on first tap/click/key.)');
+})();
+
+</script>
+</body>
+</html>

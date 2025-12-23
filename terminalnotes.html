@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Terminal Notes</title>
+<style>
+  :root{
+    --bg:#0a0e0a;
+    --fg:#33ff33;
+    --ok:#44ff44;
+    --err:#ff5555;
+    --sys:#ffb000;
+    --glow:rgba(51,255,51,.35);
+    --border:rgba(51,255,51,.18);
+    --scroll:rgba(51,255,51,.65);
+  }
+
+  /* Theme presets (applied via body class) */
+  body.theme-green{
+    --bg:#050805;
+    --fg:#3cff6a;
+    --ok:#5dff8f;
+    --err:#ff5f5f;
+    --sys:#7affc1;
+    --glow:rgba(60,255,106,.22);
+    --border:rgba(60,255,106,.35);
+    --scroll:rgba(60,255,106,.6);
+  }
+  body.theme-blue{
+    --bg:#050913;
+    --fg:#7db7ff;
+    --ok:#9ed0ff;
+    --err:#ff6b6b;
+    --sys:#b3dcff;
+    --glow:rgba(125,183,255,.22);
+    --border:rgba(125,183,255,.35);
+    --scroll:rgba(125,183,255,.6);
+  }
+  body.theme-cyan{
+    --bg:#041014;
+    --fg:#5ff2e8;
+    --ok:#7ff7ef;
+    --err:#ff6b9d;
+    --sys:#a6fff7;
+    --glow:rgba(95,242,232,.22);
+    --border:rgba(95,242,232,.35);
+    --scroll:rgba(95,242,232,.6);
+  }
+  body.theme-red{
+    --bg:#120404;
+    --fg:#ff7b7b;
+    --ok:#ffb3b3;
+    --err:#ff4d4d;
+    --sys:#ffd6d6;
+    --glow:rgba(255,123,123,.22);
+    --border:rgba(255,123,123,.35);
+    --scroll:rgba(255,123,123,.6);
+  }
+  /* Dracula-ish */
+  body.theme-dracula{
+    --bg:#0b0c1a;
+    --fg:#c6a0ff;
+    --ok:#6dff9a;
+    --err:#ff6b6b;
+    --sys:#9ee6ff;
+    --glow:rgba(198,160,255,.22);
+    --border:rgba(158,230,255,.35);
+    --scroll:rgba(198,160,255,.6);
+  }
+
+  /* Rainbow mode: animated accent (fg/sys/glow/scroll) */
+  @keyframes rainbowHue {
+    0%{ filter:hue-rotate(0deg); }
+    100%{ filter:hue-rotate(360deg); }
+  }
+  body.theme-rainbow #terminal{
+    animation: rainbowHue 6s linear infinite;
+  }
+  body.theme-rainbow{
+    --bg:#050805;
+    --fg:#3cff6a;
+    --ok:#5dff8f;
+    --err:#ff5f5f;
+    --sys:#7affc1;
+    --glow:rgba(60,255,106,.22);
+    --border:rgba(60,255,106,.35);
+    --scroll:rgba(60,255,106,.6);
+  }
+
+  html,body{
+    height:100%;
+    margin:0;
+    background:var(--bg);
+    color:var(--fg);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+  }
+  #terminal{
+    height:100%;
+    display:flex;
+    flex-direction:column;
+    padding:16px;
+    box-sizing:border-box;
+    cursor:text;
+  }
+  #output{
+    flex:1;
+    overflow:auto;
+    white-space:pre-wrap;
+    line-height:1.5;
+    text-shadow:0 0 6px var(--glow);
+    padding-right:6px;
+  }
+  .line{margin:0 0 6px 0;}
+  .ok{color:var(--ok);}
+  .err{color:var(--err);}
+  .sys{color:var(--sys);}
+  .muted{opacity:.7;}
+  .promptRow{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    border-top:1px solid var(--border);
+    padding-top:12px;
+    margin-top:6px;
+  }
+  .promptRow span{color:var(--sys);text-shadow:none;user-select:none;}
+  #input{
+    flex:1;
+    background:transparent;
+    border:none;
+    outline:none;
+    color:var(--fg);
+    font:inherit;
+    font-size:16px;
+    caret-color:var(--fg);
+  }
+  #input::selection{background:var(--fg);color:var(--bg);text-shadow:none;}
+
+  /* nicer scrollbar */
+  #output::-webkit-scrollbar{width:10px;}
+  #output::-webkit-scrollbar-track{background:rgba(0,0,0,.4);border-radius:6px;}
+  #output::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px;}
+  #output::-webkit-scrollbar-thumb:hover{background:var(--sys);}
+</style>
+</head>
+<body>
+<div id="terminal" aria-label="Terminal Notes" role="application">
+  <div id="output" aria-live="polite"></div>
+  <div class="promptRow">
+    <span>&gt;</span>
+    <input id="input" autocomplete="off" spellcheck="false" />
+  </div>
+</div>
+
+<script>
+/**
+ * Terminal Notes (terminal-only)
+ * Commands (core):
+ * - new "title" "body"
+ * - list  (aliases: ls)
+ * - open "title" (aliases: view, show)
+ *   also supports: open quick   (no quotes)
+ * - find "term"  (aliases: search)
+ * - delete <id|number> (alias: rm)
+ * - deleteall confirm  (aliases: purge)
+ * - export (aliases: save)
+ * - help
+ *
+ * Quick note:
+ * - If input doesn't start with a known command, it becomes a quick note.
+ */
+
+const output = document.getElementById('output');
+const input = document.getElementById('input');
+const terminal = document.getElementById('terminal');
+
+let notes = safeParse(localStorage.getItem('terminal_notes')) || [];
+let quickCounter = Number(localStorage.getItem('terminal_quick_counter') || '0');
+let currentNote = null; // last opened/edited note
+let undoStack = []; // one-step undo (stack of snapshots)
+
+function safeParse(s){
+  try { return JSON.parse(s); } catch { return null; }
+}
+function persist(){
+  localStorage.setItem('terminal_notes', JSON.stringify(notes));
+  localStorage.setItem('terminal_quick_counter', String(quickCounter));
+}
+
+function pushUndo(){
+  // Deep-copy notes so undo is stable even if objects mutate later
+  undoStack.push({
+    notes: JSON.parse(JSON.stringify(notes)),
+    currentId: currentNote ? currentNote.id : null
+  });
+  if (undoStack.length > 50) undoStack.shift();
+}
+
+function nowISO(){ return new Date().toISOString(); }
+function local(ts){ try { return new Date(ts).toLocaleString(); } catch { return String(ts); } }
+
+function escapeMd(str){
+  // minimal markdown escaping
+  return String(str ?? '').replace(/[\\`*_{}\[\]()#+\-.!|>]/g, (m) => '\\' + m);
+}
+
+function print(text, cls=''){
+  const div = document.createElement('div');
+  div.className = 'line ' + cls;
+  div.textContent = text;
+  output.appendChild(div);
+  output.scrollTop = output.scrollHeight;
+}
+const THEME_KEY = 'terminal_theme';
+const THEMES = ['green','blue','cyan','red','dracula','rainbow'];
+
+function applyTheme(name){
+  const n = (name || '').toLowerCase();
+  const chosen = THEMES.includes(n) ? n : 'green';
+  document.body.classList.remove(...THEMES.map(t => 'theme-' + t));
+  document.body.classList.add('theme-' + chosen);
+  localStorage.setItem(THEME_KEY, chosen);
+  return chosen;
+}
+
+function cmdTheme(argStr){
+  const a = (argStr || '').trim();
+  if (!a){
+    const current = localStorage.getItem(THEME_KEY) || 'green';
+    print(`[SYS] Theme: ${current}`, 'sys');
+    print('Usage: theme <green|blue|cyan|red|dracula|rainbow>', 'muted');
+    return;
+  }
+  const choice = parseArgs(a)[0] || a;
+  const chosen = applyTheme(choice);
+  print(`[OK] Theme set to ${chosen}`, 'ok');
+}
+
+
+function parseArgs(str){
+  // "quoted strings" or bare tokens
+  const re = /"([^"]+)"|(\S+)/g;
+  const args = [];
+  let m;
+  while ((m = re.exec(str)) !== null) args.push(m[1] || m[2]);
+  return args;
+}
+
+function usageNew(){
+  print('Usage: new "title" "body"', 'err');
+}
+
+function createNote(title, body, {isQuick=false} = {}){
+  const createdAt = nowISO();
+  const note = {
+    id: (crypto.randomUUID ? crypto.randomUUID() : (Math.random().toString(16).slice(2)+Math.random().toString(16).slice(2))).slice(0,8),
+    title: title,
+    body: body,
+    createdAt,
+    updatedAt: createdAt
+  };
+  pushUndo();
+  notes.push(note);
+  persist();
+  if (isQuick){
+    print(`[OK] Created quick note ${note.id} "${note.title}" at ${local(createdAt)}`, 'ok');
+  } else {
+    print(`[OK] Created note ${note.id} "${note.title}" at ${local(createdAt)}`, 'ok');
+  }
+  return note;
+}
+
+function cmdNew(argStr){
+  const args = parseArgs(argStr);
+  if (args.length < 2) return usageNew();
+  createNote(args[0], args[1], {isQuick:false});
+}
+
+function cmdList(){
+  if (!notes.length){
+    print('No notes yet. Type a line to create a quick note, or use: new "title" "body"', 'sys');
+    return;
+  }
+
+  // Number is primary (1..N). IDs stay short. Show title + tiny body preview.
+  notes.forEach((n, i) => {
+    const snippet = String(n.body || '').replace(/\s+/g,' ').trim().slice(0, 48);
+    const more = (String(n.body||'').replace(/\s+/g,' ').trim().length > 48) ? '…' : '';
+    const title = String(n.title || '').trim().slice(0, 42);
+    const tmore = (String(n.title||'').trim().length > 42) ? '…' : '';
+    print(`${i+1}. ${n.id} | ${title}${tmore} | ${snippet}${more}`);
+  });
+
+  print('[SYS] Tip: open <number>, edit <number> "new body", delete <number>', 'sys');
+}
+
+
+function resolveSelector(sel){
+  if (!sel) return null;
+  // id
+  if (/^[a-f0-9]{8}$/i.test(sel)){
+    return notes.find(n => n.id.toLowerCase() === sel.toLowerCase()) || null;
+  }
+  // number
+  const idx = Number(sel);
+  if (Number.isInteger(idx) && idx >= 1 && idx <= notes.length){
+    return notes[idx-1];
+  }
+  return null;
+}
+
+function cmdOpen(argStr){
+  const s = (argStr || '').trim();
+  if (!s){
+    print('Usage: open "title"  (or: open <term>)', 'err');
+    return;
+  }
+
+  // Allow quoted title OR unquoted remainder as a search term.
+  // If the user typed open "Exact Title" use that as exact match first.
+  const args = parseArgs(s);
+  const term = (args.join(' ') || s).trim();
+  if (!term){
+    print('Usage: open "title"  (or: open <term>)', 'err');
+    return;
+  }
+
+  // exact title match (case-insensitive)
+  let matches = notes.filter(n => n.title.toLowerCase() === term.toLowerCase());
+  if (!matches.length){
+    // partial match in title first, then body
+    const t = term.toLowerCase();
+    matches = notes.filter(n => n.title.toLowerCase().includes(t));
+    if (!matches.length) matches = notes.filter(n => n.body.toLowerCase().includes(t));
+  }
+
+  if (!matches.length){
+    print(`No note found for: ${term}`, 'err');
+    return;
+  }
+
+  if (matches.length > 1){
+    print(`[SYS] Multiple matches for "${term}". Use open <number|id> from this list:`, 'sys');
+    matches.forEach(n => {
+      const i = notes.indexOf(n) + 1;
+      print(`  ${i}. ${n.id} | ${n.title} | ${local(n.createdAt)}`, 'muted');
+    });
+    return;
+  }
+
+  const n = matches[0];
+  currentNote = n;
+  print(`[SYS] Now selected: ${n.title} (${n.id})`, 'sys');
+  print(`ID: ${n.id}`, 'sys');
+  print(`Title: ${n.title}`, 'sys');
+  print(`Body: ${n.body}`);
+  print(`Created: ${local(n.createdAt)}`, 'muted');
+  print(`Updated: ${local(n.updatedAt)}`, 'muted');
+}
+
+function cmdFind(argStr){
+  const s = (argStr || '').trim();
+  if (!s){
+    print('Usage: find "term"  (or: find <term>)', 'err');
+    return;
+  }
+  const args = parseArgs(s);
+  const term = (args.join(' ') || s).trim();
+  const t = term.toLowerCase();
+  const matches = notes
+    .map((n, idx) => ({n, idx}))
+    .filter(({n}) => n.title.toLowerCase().includes(t) || n.body.toLowerCase().includes(t));
+
+  if (!matches.length){
+    print('No matches.', 'sys');
+    return;
+  }
+  print(`[SYS] Matches for "${term}":`, 'sys');
+  matches.forEach(({n, idx}) => {
+    print(`${idx+1}. ${n.id} | ${n.title}`, 'muted');
+  });
+}
+function cmdEdit(argStr){
+  const raw = (argStr || '').trim();
+  if (!raw){
+    print('Usage: edit "new body"  OR  edit <number|id|"title"> "new body"', 'err');
+    return;
+  }
+
+  const args = parseArgs(raw);
+
+  let target = null;
+  let newBody = '';
+
+  // edit "new body"  -> edits currently selected (last opened/edited) note
+  if (args.length === 1){
+    if (!currentNote){
+      print('No note selected. Use: open <number> (or open "title") first.', 'err');
+      return;
+    }
+    target = currentNote;
+    newBody = args[0];
+  } else {
+    const selector = args[0];
+    newBody = args.slice(1).join(' ');
+
+    // Prefer number from list, then id, then exact title.
+    target = resolveSelector(selector);
+    if (!target){
+      target = notes.find(n => n.title.toLowerCase() === selector.toLowerCase()) || null;
+    }
+  }
+
+  if (!target){
+    print('Note not found. Tip: use list to get the number, then: edit <number> "new body".', 'err');
+    return;
+  }
+
+  pushUndo();
+  target.body = newBody;
+  target.updatedAt = nowISO();
+  currentNote = target;
+  persist();
+  print(`[OK] Updated ${notes.indexOf(target)+1}. "${target.title}"`, 'ok');
+}
+
+
+function cmdRename(argStr){
+  const raw = (argStr || '').trim();
+  if (!raw){
+    print('Usage: rename <id|number|"title"> "new title"', 'err');
+    return;
+  }
+  const args = parseArgs(raw);
+  if (args.length < 2){
+    print('Usage: rename <id|number|"title"> "new title"', 'err');
+    return;
+  }
+  const selector = args[0];
+  const newTitle = args.slice(1).join(' ');
+  let target = resolveSelector(selector);
+  if (!target){
+    target = notes.find(n => n.title.toLowerCase() === selector.toLowerCase()) || null;
+  }
+  if (!target){
+    print('Note not found. Tip: use list to see numbers, or rename "Exact Title" "new title".', 'err');
+    return;
+  }
+  pushUndo();
+  const old = target.title;
+  target.title = newTitle;
+  target.updatedAt = nowISO();
+  persist();
+  print(`[OK] Renamed "${old}" -> "${target.title}" (${target.id})`, 'ok');
+}
+
+function cmdStatus(){
+  print(`[SYS] Notes: ${notes.length} | Theme: ${(localStorage.getItem(THEME_KEY) || 'green')}`, 'sys');
+}
+
+function cmdUndo(){
+  if (!undoStack.length){
+    print('Nothing to undo.', 'sys');
+    return;
+  }
+  const last = undoStack.pop();
+  notes = last.notes || [];
+  currentNote = last.currentId ? (notes.find(n => n.id === last.currentId) || null) : null;
+  persist();
+  print('[OK] Undid last change.', 'ok');
+}
+
+
+
+
+function cmdDelete(argStr){
+  const raw = (argStr || '').trim();
+  if (!raw){
+    print('Usage: delete <id|number|"title of note">', 'err');
+    return;
+  }
+
+  const args = parseArgs(raw);
+  // If they used quotes, parseArgs will keep the full title as one arg.
+  // If they didn't, allow multi-word titles by joining all tokens.
+  const selector = args.length ? args.join(' ') : raw;
+
+  // try selector first (id/number)
+  let target = resolveSelector(selector);
+
+  if (!target){
+    // exact title match (case-insensitive)
+    target = notes.find(n => n.title.toLowerCase() === selector.toLowerCase()) || null;
+  }
+
+  if (!target){
+    // helpful fallback: single-arg delete <term> deletes if only one title match
+    const t = selector.toLowerCase();
+    const matches = notes.filter(n => n.title.toLowerCase().includes(t));
+    if (matches.length === 1) target = matches[0];
+  }
+
+  if (!target){
+    print('Note not found. Tip: use list to see numbers, or delete "Exact Title".', 'err');
+    return;
+  }
+
+  pushUndo();
+  const id = target.id;
+  notes = notes.filter(n => n !== target);
+  persist();
+  print(`[OK] Deleted note ${id} "${target.title}"`, 'ok');
+}
+
+
+function cmdDeleteAll(argStr){
+  const s = (argStr || '').trim().toLowerCase();
+  if (!notes.length){
+    print('No notes to delete.', 'sys');
+    return;
+  }
+  // Safety: require an explicit confirm token to avoid accidental wipes.
+  if (s !== 'confirm' && s !== 'yes' && s !== '--yes' && s !== '-y'){
+    print('This will permanently delete ALL notes in this browser.', 'err');
+    print('To proceed, type: deleteall confirm', 'muted');
+    return;
+  }
+  pushUndo();
+  const count = notes.length;
+  notes = [];
+  quickCounter = 0;
+  // Clear storage keys too so it’s a true reset
+  localStorage.removeItem('terminal_notes');
+  localStorage.removeItem('terminal_quick_counter');
+  persist();
+  cmdClear(); // also clear the screen
+  print(`[OK] Deleted all notes (${count}).`, 'ok');
+}
+
+function cmdClear(){
+  // Clear terminal output only (does not affect notes)
+  output.innerHTML = '';
+}
+
+function cmdExport(argStr){
+  const args = parseArgs((argStr || '').trim());
+  const mode = (args[0] || '').toLowerCase(); // 'md' or ''
+  const exportedAt = nowISO();
+  const asMarkdown = (mode === 'md' || mode === 'markdown');
+
+  const exportedAtLocal = local(exportedAt);
+
+  let text = '';
+  if (asMarkdown){
+    text += `# Notes
+
+`;
+    text += `- Exported: ${exportedAtLocal}
+`;
+    text += `- Count: ${notes.length}
+
+`;
+    if (!notes.length){
+      text += `_No notes_
+`;
+    } else {
+      notes.forEach((n, idx) => {
+        text += `---
+`;
+        text += `## ${idx+1}. ${escapeMd(n.title)}
+
+`;
+        text += `- ID: ${n.id}
+`;
+        text += `- Created: ${local(n.createdAt)}
+`;
+        text += `- Updated: ${local(n.updatedAt)}
+
+`;
+        text += `${escapeMd(n.body)}
+
+`;
+      });
+    }
+  } else {
+    text += `NOTES EXPORT
+`;
+    text += `Exported: ${exportedAtLocal}
+`;
+    text += `Count: ${notes.length}
+
+`;
+    if (!notes.length){
+      text += `(No notes)
+`;
+    } else {
+      notes.forEach((n, idx) => {
+        text += `--------------------------------
+`;
+        text += `${idx+1}) ${n.title} (${n.id})
+`;
+        text += `Created: ${local(n.createdAt)}
+`;
+        text += `Updated: ${local(n.updatedAt)}
+`;
+        text += `Body:
+${n.body}
+
+`;
+      });
+    }
+  }
+
+  const blob = new Blob([text], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = asMarkdown ? 'notes.md' : 'notes.txt';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+
+  print(`[OK] Exported ${notes.length} note${notes.length===1?'':'s'} at ${exportedAtLocal}${asMarkdown ? ' (md)' : ''}`, 'ok');
+}
+
+function cmdHelp(argStr){
+  const topic = (parseArgs((argStr || '').trim())[0] || '').toLowerCase();
+
+  if (!topic){
+    print('Help topics:', 'sys');
+    print('  help notes   - note commands');
+    print('  help theme   - theme/color');
+    print('  help keys    - keyboard shortcuts');
+    print('  help export  - export modes');
+    print('  help all     - full help');
+    print('', 'sys');
+    print('Tip: Type anything that is NOT a command to create a quick note.', 'muted');
+    return;
+  }
+
+  if (topic === 'notes' || topic === 'note'){
+    print('Notes:', 'sys');
+    print('  new "title" "body"      - create a note');
+    print('  list | ls               - list notes');
+    print('  open "title"            - open by title (or: open <term>)');
+    print('  open <id|number>        - open by id or list number');
+    print('  find "term"             - search title/body');
+    print('  edit "body"             - update currently selected note (last opened)');
+    print('  edit <number> "body"    - update by list number');
+    print('  rename <id|number> "t"  - rename title');
+    print('  delete <id|number>      - delete');
+    print('  deleteall confirm       - delete ALL (requires confirm)');
+    print('  undo                   - undo last note change');
+    return;
+  }
+
+  if (topic === 'theme' || topic === 'color'){
+    print('Theme:', 'sys');
+    print('  theme <name>  - set theme (green/blue/cyan/red/dracula/rainbow)');
+    print('  theme         - show current theme');
+    return;
+  }
+
+  if (topic === 'export'){
+    print('Export:', 'sys');
+    print('  export        - download .txt');
+    print('  export md     - download .md');
+    print('  save          - alias for export');
+    return;
+  }
+
+  if (topic === 'keys' || topic === 'keyboard'){
+    print('Keyboard:', 'sys');
+    print('  Enter        - run command');
+    print('  ↑ / ↓        - command history');
+    print('  Tab          - autocomplete command');
+    print('  Ctrl+L       - clear screen');
+    return;
+  }
+
+  if (topic === 'all'){
+    // print full help
+    cmdHelp('notes');
+    print('', 'sys');
+    cmdHelp('theme');
+    print('', 'sys');
+    cmdHelp('export');
+    print('', 'sys');
+    cmdHelp('keys');
+    return;
+  }
+
+  print('Unknown help topic. Try: help', 'err');
+}
+
+const COMMANDS = {
+  'new': cmdNew,
+  'list': () => cmdList(),
+  'ls': () => cmdList(),
+  'open': cmdOpen,
+  'view': cmdOpen,
+  'show': cmdOpen,
+  'find': cmdFind,
+  'search': cmdFind,
+  'edit': cmdEdit,
+  'update': cmdEdit,
+  'rename': cmdRename,
+  'mv': cmdRename,
+  'delete': cmdDelete,
+  'rm': cmdDelete,
+  'deleteall': cmdDeleteAll,
+  'purge': cmdDeleteAll,
+  'clear': () => cmdClear(),
+  'cls': () => cmdClear(),
+  'export': cmdExport,
+  'save': cmdExport,
+  'help': cmdHelp,
+  '?': cmdHelp,
+  'theme': cmdTheme,
+  'color': cmdTheme,
+  'undo': () => cmdUndo(),
+  'status': () => cmdStatus(),
+};
+
+function isCommandToken(tok){
+  if (!tok) return false;
+  return Object.prototype.hasOwnProperty.call(COMMANDS, tok.toLowerCase());
+}
+
+function createQuickFromText(text){
+  quickCounter += 1;
+  const title = `Quick Note ${quickCounter}`;
+  createNote(title, text, {isQuick:true});
+}
+
+function handleInput(raw){
+  const trimmed = raw.trim();
+  if (!trimmed) return;
+
+  print('> ' + trimmed);
+
+  // Tokenize first word only (commands are single-word)
+  const first = trimmed.split(/\s+/)[0].toLowerCase();
+  const rest = trimmed.slice(first.length).trim();
+
+  // If they typed "open 2" or "show 2", allow number/id selector shortcut.
+  if (['open','view','show'].includes(first) && rest){
+    // if rest looks like selector, open it directly
+    const sel = parseArgs(rest)[0] || rest;
+    const bySel = resolveSelector(sel);
+    if (bySel){
+      // print the note
+      const n = bySel;
+      currentNote = n;
+      print(`[SYS] Now selected: ${n.title} (${n.id})`, 'sys');
+      print(`ID: ${n.id}`, 'sys');
+      print(`Title: ${n.title}`, 'sys');
+      print(`Body: ${n.body}`);
+      print(`Created: ${local(n.createdAt)}`, 'muted');
+      print(`Updated: ${local(n.updatedAt)}`, 'muted');
+      return;
+    }
+  }
+
+  if (isCommandToken(first)){
+    try{
+      COMMANDS[first](rest);
+    } catch (e){
+      print('Command error: ' + (e && e.message ? e.message : String(e)), 'err');
+    }
+    return;
+  }
+
+  // Not a command => quick note
+  createQuickFromText(trimmed);
+}
+
+// Autofocus: click anywhere to type
+function focusInput(){ input.focus({preventScroll:true}); }
+window.addEventListener('load', () => {
+  applyTheme(localStorage.getItem(THEME_KEY) || 'green');
+  focusInput();
+  print(`Terminal Notes ready. ${notes.length} note${notes.length===1?'':'s'} stored. Type help.`, 'sys');
+});
+terminal.addEventListener('mousedown', (e) => {
+  // Don't steal focus if user is selecting text in output
+  if (window.getSelection && window.getSelection().toString()) return;
+  focusInput();
+});
+terminal.addEventListener('touchstart', () => focusInput(), {passive:true});
+
+// Command history (session-only)
+const history = [];
+let histIndex = -1;
+
+function pushHistory(cmd){
+  const c = String(cmd || '').trim();
+  if (!c) return;
+  if (history.length && history[history.length-1] === c) return;
+  history.push(c);
+  histIndex = history.length;
+}
+
+function setInputValue(v){
+  input.value = v;
+  // move caret to end
+  requestAnimationFrame(() => {
+    try{
+      const len = input.value.length;
+      input.setSelectionRange(len, len);
+    } catch {}
+  });
+}
+
+function autocompleteCommand(prefix){
+  const p = (prefix || '').toLowerCase();
+  if (!p) return {type:'none'};
+  const keys = Object.keys(COMMANDS).filter(k => k && k.toLowerCase().startsWith(p));
+  // hide '?' from autocomplete noise unless exact
+  const filtered = keys.filter(k => k !== '?' );
+  const matches = filtered.length ? filtered : keys;
+
+  if (!matches.length) return {type:'none'};
+  if (matches.length === 1) return {type:'single', value: matches[0]};
+  return {type:'multi', values: matches.sort()};
+}
+
+input.addEventListener('keydown', (e) => {
+  // Ctrl+L: clear screen (terminal-style)
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'l' || e.key === 'L')){
+    e.preventDefault();
+    cmdClear();
+    return;
+  }
+
+  // History nav
+  if (e.key === 'ArrowUp'){
+    if (!history.length) return;
+    e.preventDefault();
+    if (histIndex <= 0) histIndex = 0;
+    else histIndex -= 1;
+    setInputValue(history[histIndex] || '');
+    return;
+  }
+  if (e.key === 'ArrowDown'){
+    if (!history.length) return;
+    e.preventDefault();
+    if (histIndex >= history.length) histIndex = history.length;
+    else histIndex += 1;
+    setInputValue(history[histIndex] || '');
+    return;
+  }
+
+  // Tab autocomplete (command token only)
+  if (e.key === 'Tab'){
+    const v = input.value;
+    const left = v.slice(0, input.selectionStart ?? v.length);
+    const right = v.slice(input.selectionEnd ?? v.length);
+
+    // only autocomplete if caret is at end or in the first token area
+    const tokens = left.split(/\s+/);
+    const firstTok = tokens[0] || '';
+    const hasSpace = left.includes(' ');
+
+    if (!hasSpace){
+      e.preventDefault();
+      const res = autocompleteCommand(firstTok);
+      if (res.type === 'single'){
+        setInputValue(res.value + ' ');
+      } else if (res.type === 'multi'){
+        print('[SYS] Matches: ' + res.values.join(', '), 'sys');
+      }
+      return;
+    }
+  }
+
+  // Enter to run
+  if (e.key === 'Enter'){
+    const raw = input.value;
+    input.value = '';
+    pushHistory(raw);
+    handleInput(raw);
+    return;
+  }
+});
+// Global key capture: start typing without clicking
+window.addEventListener('keydown', (e) => {
+  if (
+    document.activeElement !== input &&
+    !e.ctrlKey && !e.metaKey && !e.altKey &&
+    e.key.length === 1
+  ) {
+    focusInput();
+  }
+});
+
+</script>
+</body>
+</html>

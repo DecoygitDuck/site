@@ -1,0 +1,529 @@
+<!doctype html><meta charset="utf-8">
+<title>GIR ORB: BEAUTIFUL WORLDS</title>
+<canvas id=c></canvas>
+<script>
+const C=c, X=C.getContext("2d");
+let W,H,DPR=1; const K={};
+onkeydown=e=>{K[e.key]=1;
+  if(e.key===" "){e.preventDefault(); boomToggle();}
+  if(e.key==="r"||e.key==="R"){e.preventDefault(); resetWorld();}
+  if(e.key==="m"||e.key==="M"){e.preventDefault(); toggleMuteMelt();}
+  if(e.key==="f"||e.key==="F"){showFace^=1; K.f=K.F=0;}
+  if(e.key==="g"||e.key==="G"){pretty.glow = pretty.glow?0:1; K.g=K.G=0;}
+};
+onkeyup=e=>K[e.key]=0;
+function rs(){DPR=devicePixelRatio||1;W=innerWidth;H=innerHeight;
+  C.width=W*DPR;C.height=H*DPR;C.style.width=W+"px";C.style.height=H+"px";
+  X.setTransform(DPR,0,0,DPR,0,0)
+}
+onresize=rs; rs();
+
+/* ====== pretty knobs ====== */
+const pretty={
+  glow:1,
+  // global brightness caps
+  starAlpha:0.45,
+  vignette:0.75,
+  grain:0.055,
+  // lava palette (soft iridescent)
+  lavaHues:[18, 205, 280, 330], // peach, teal, lilac, rose
+};
+
+const orb={x:0,y:0,vx:0,vy:0,ang:0,w:0,panic:0,scream:0,alive:1};
+let showFace=1, t=0;
+
+// stars
+const N=520, stars=[...Array(N)].map(()=>mkStar());
+function mkStar(){return {x:(Math.random()*2-1)*1400,y:(Math.random()*2-1)*1400,z:Math.random()*1200+1,h:Math.random()*360};}
+
+// explode/fuse
+let mode="normal"; let shock=0, fuse=0;
+const bits=[], dust=[];
+function spawnDust(n){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2, r=60+Math.random()*Math.min(W,H)*0.55;
+    dust.push({x:Math.cos(a)*r, y:Math.sin(a)*r, vx:0, vy:0, life:1});
+  }
+}
+function boomToggle(){ if(mode==="normal") startExplode(); else if(mode==="explode") startFuse(); }
+function startExplode(){
+  mode="explode"; shock=1; fuse=0; orb.alive=0;
+  bits.length=0; dust.length=0;
+  const sp=Math.hypot(orb.vx,orb.vy), base=(sp*0.55+5);
+  for(let i=0;i<200;i++){
+    const a=Math.random()*Math.PI*2, v=base*(0.35+Math.random()*1.35);
+    bits.push({x:0,y:0,vx:Math.cos(a)*v+orb.vx*0.35,vy:Math.sin(a)*v+orb.vy*0.35,
+      r:0.7+Math.random()*1.8,h:180+Math.random()*120,life:1});
+  }
+  spawnDust(280);
+  audioPoke(()=>drumCrash());
+}
+function startFuse(){
+  mode="fuse"; fuse=0; shock=0.25;
+  for(const b of bits){ b.vx*=0.22; b.vy*=0.22; }
+  audioPoke(()=>drumReverseSuck());
+}
+
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+
+/* ===== MUSIC WORLD (same engine, trimmed visuals only) ===== */
+let AC=null, master=null, delay=null, delayGain=null, comp=null;
+let musicOn=true, playing=false;
+let seed=1, bpm=90, swing=0.58, barSteps=16, bars=2;
+let patK=[], patS=[], patH=[], patB=[];
+let scale=[0,3,5,7,10], root=46;
+let nextNoteTime=0, step=0, schedTimer=null, worldLabel="";
+
+function rng(){ seed|=0; seed ^= seed<<13; seed ^= seed>>>17; seed ^= seed<<5; return (seed>>>0)/4294967296; }
+function pick(a){return a[(rng()*a.length)|0]}
+function rint(a,b){return (a + (rng()*(b-a+1)|0))|0}
+function rfloat(a,b){return a + rng()*(b-a)}
+function ensureAudio(){
+  if(AC) return;
+  AC=new (window.AudioContext||window.webkitAudioContext)();
+  master=AC.createGain(); master.gain.value=0.85;
+  comp=AC.createDynamicsCompressor();
+  comp.threshold.value=-18; comp.knee.value=20; comp.ratio.value=6; comp.attack.value=0.003; comp.release.value=0.15;
+  delay=AC.createDelay(1.0);
+  delayGain=AC.createGain(); delayGain.gain.value=0.18;
+  const fb=AC.createGain(); fb.gain.value=0.32; delay.connect(fb); fb.connect(delay);
+  const hp=AC.createBiquadFilter(); hp.type="highpass"; hp.frequency.value=220;
+  master.connect(comp); comp.connect(hp); hp.connect(AC.destination);
+  const send=AC.createGain(); send.gain.value=0.22;
+  master.connect(send); send.connect(delay); delay.connect(delayGain); delayGain.connect(master);
+}
+function startMusic(){
+  ensureAudio();
+  if(AC.state==="suspended") AC.resume();
+  if(playing) return;
+  playing=true;
+  nextNoteTime=AC.currentTime+0.05;
+  step=0;
+  schedTimer=setInterval(scheduler, 25);
+}
+function scheduler(){
+  if(!playing) return;
+  const lookahead=0.12;
+  while(nextNoteTime < AC.currentTime + lookahead){
+    scheduleStep(step, nextNoteTime);
+    const spb=60/bpm, sps=spb/4;
+    const swingOffset=(step%2? (swing-0.5)*sps : 0);
+    nextNoteTime += sps + swingOffset;
+    step=(step+1)%(barSteps*bars);
+  }
+}
+function worldize(){
+  seed=((Date.now() ^ (Math.random()*1e9))|0) || 1;
+  bpm=rint(82,102);
+  swing=rfloat(0.54,0.62);
+  bars=pick([1,2,2,4]); barSteps=16;
+  root=pick([41,43,46,48,50]);
+  scale=pick([[0,3,5,7,10],[0,2,3,7,10],[0,3,5,8,10],[0,2,5,7,9]]);
+  const L=barSteps*bars;
+  patK=new Array(L).fill(0);
+  patS=new Array(L).fill(0);
+  patH=new Array(L).fill(0);
+  patB=new Array(L).fill(null);
+
+  for(let b=0;b<bars;b++){
+    patS[b*16+4]=1; patS[b*16+12]=1;
+    if(rng()<0.35) patS[b*16+14]=0.25;
+  }
+  for(let b=0;b<bars;b++){
+    patK[b*16+0]=1;
+    if(rng()<0.85) patK[b*16+8]=0.65;
+    if(rng()<0.55) patK[b*16+10]=0.55;
+    if(rng()<0.35) patK[b*16+3]=0.35;
+    if(rng()<0.25) patK[b*16+13]=0.45;
+  }
+  for(let i=0;i<L;i++){
+    const on8=(i%2===0);
+    if(on8) patH[i]=0.5;
+    if(rng()<0.16) patH[i]=0.25;
+    if(rng()<0.12 && on8) patH[i]*=0.35;
+  }
+  for(let b=0;b<bars;b++) if(rng()<0.5) patH[b*16+15]=0.8;
+
+  let lastDeg=pick([0,0,0,2,3,4]);
+  for(let i=0;i<L;i+=2){
+    if(rng()<0.55) lastDeg=clamp(lastDeg+pick([-1,0,1,2,-2]),0,scale.length-1);
+    const octave=rng()<0.2?-12:0;
+    const midi=root+scale[lastDeg]+octave;
+    const gate=rng()<0.15?0:1;
+    patB[i]=gate?{m:midi,v:rfloat(0.32,0.62)}:null;
+    if(rng()<0.2) patB[i+1]={m:root+scale[pick([0,2,3,4])],v:rfloat(0.18,0.38)};
+  }
+  worldLabel=`WORLD ${(seed>>>0).toString(16)} • ${bpm} BPM • swing ${swing.toFixed(2)} • ${bars} bar`;
+  ensureAudio();
+  const spb=60/bpm;
+  delay.delayTime.setValueAtTime(pick([spb/2, spb/3, spb/4, spb*0.75]), AC.currentTime);
+}
+function midiToHz(m){ return 440*Math.pow(2,(m-69)/12); }
+function envGain(t,a,d,s,r,peak=1){
+  const g=AC.createGain();
+  g.gain.setValueAtTime(0,t);
+  g.gain.linearRampToValueAtTime(peak,t+a);
+  g.gain.linearRampToValueAtTime(peak*s,t+a+d);
+  g.gain.linearRampToValueAtTime(0,t+a+d+r);
+  return g;
+}
+function drumKick(t,v=1){
+  const o=AC.createOscillator(); o.type="sine";
+  const g=envGain(t,0.001,0.02,0.15,0.12,0.85*v);
+  o.frequency.setValueAtTime(150,t);
+  o.frequency.exponentialRampToValueAtTime(48,t+0.08);
+  o.connect(g); g.connect(master);
+  o.start(t); o.stop(t+0.2);
+}
+function drumSnare(t,v=1){
+  const b=AC.createBuffer(1,(AC.sampleRate*0.11)|0,AC.sampleRate);
+  const d=b.getChannelData(0);
+  for(let i=0;i<d.length;i++){ const e=Math.exp(-i/980); d[i]=(Math.random()*2-1)*e; }
+  const n=AC.createBufferSource(); n.buffer=b;
+  const bp=AC.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=1700; bp.Q.value=0.9;
+  const g=envGain(t,0.001,0.03,0.0,0.09,0.45*v);
+  n.connect(bp); bp.connect(g); g.connect(master);
+  n.start(t); n.stop(t+0.12);
+}
+function drumHat(t,v=0.6){
+  const b=AC.createBuffer(1,(AC.sampleRate*0.03)|0,AC.sampleRate);
+  const d=b.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/240);
+  const n=AC.createBufferSource(); n.buffer=b;
+  const hp=AC.createBiquadFilter(); hp.type="highpass"; hp.frequency.value=6500;
+  const g=envGain(t,0.001,0.008,0.0,0.02,0.16*v);
+  n.connect(hp); hp.connect(g); g.connect(master);
+  n.start(t); n.stop(t+0.04);
+}
+function bassNote(t,hz,v=0.6,dur=0.12){
+  const o=AC.createOscillator(); o.type=pick(["triangle","sawtooth"]);
+  const lp=AC.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=800; lp.Q.value=0.7;
+  const g=envGain(t,0.002,0.03,0.25,0.11,0.32*v);
+  o.frequency.setValueAtTime(hz,t);
+  o.frequency.exponentialRampToValueAtTime(hz*0.985,t+dur);
+  o.connect(lp); lp.connect(g); g.connect(master);
+  o.start(t); o.stop(t+dur+0.12);
+}
+function drumCrash(){ if(!AC) return; const t0=AC.currentTime+0.01; for(let i=0;i<5;i++) drumHat(t0+i*0.012,1.0-(i*0.16)); }
+function drumReverseSuck(){
+  if(!AC) return;
+  const t0=AC.currentTime+0.01;
+  const b=AC.createBuffer(1,(AC.sampleRate*0.22)|0,AC.sampleRate);
+  const d=b.getChannelData(0);
+  for(let i=0;i<d.length;i++){ const e=i/d.length; d[i]=(Math.random()*2-1)*e*e; }
+  const n=AC.createBufferSource(); n.buffer=b;
+  const lp=AC.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=1100;
+  const g=AC.createGain();
+  g.gain.setValueAtTime(0,t0);
+  g.gain.linearRampToValueAtTime(0.25,t0+0.16);
+  g.gain.linearRampToValueAtTime(0,t0+0.22);
+  n.connect(lp); lp.connect(g); g.connect(master);
+  n.start(t0); n.stop(t0+0.23);
+}
+function scheduleStep(i,t1){
+  const k=patK[i], s=patS[i], h=patH[i], b=patB[i];
+  if(k) drumKick(t1,k);
+  if(s) drumSnare(t1,s);
+  if(h) drumHat(t1,h);
+  if(b) bassNote(t1,midiToHz(b.m),b.v,0.10+(rng()*0.08));
+}
+function audioPoke(fn){ if(!AC) return; if(AC.state==="suspended") AC.resume(); fn && fn(); }
+function resetWorld(){
+  orb.x=orb.y=orb.vx=orb.vy=orb.w=0;
+  ensureAudio(); startMusic(); worldize();
+  audioPoke(()=>{const t0=AC.currentTime+0.02; drumKick(t0,1); drumSnare(t0+60/bpm/2,0.6);});
+}
+
+/* ===== MELT (now: “iridescent ink”, not nuclear lava) ===== */
+let melt=0, meltTarget=0;
+const lava=[];
+function lavaHue(){ return pretty.lavaHues[(Math.random()*pretty.lavaHues.length)|0] + (Math.random()*16-8); }
+function spawnLava(n){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2;
+    const r=6+Math.random()*18;
+    const x=Math.cos(a)*(8+Math.random()*16);
+    const y=Math.sin(a)*(6+Math.random()*10) + (Math.random()*10);
+    const vx=(Math.random()*2-1)*0.45;
+    const vy=0.45+Math.random()*1.25;
+    lava.push({x,y,vx,vy,r,life:1,h:lavaHue()});
+  }
+}
+function toggleMuteMelt(){
+  ensureAudio(); startMusic();
+  musicOn=!musicOn;
+  master.gain.value = musicOn ? 0.85 : 0.0;
+
+  meltTarget = musicOn ? 0 : 1;
+  if(meltTarget>0.5){ spawnLava(18); audioPoke(()=>drumSnare(AC.currentTime+0.01,0.55)); }
+  else { audioPoke(()=>drumKick(AC.currentTime+0.01,0.75)); }
+}
+
+/* unlock audio */
+addEventListener("pointerdown", ()=>{ ensureAudio(); startMusic(); if(!worldLabel) worldize(); }, {once:true});
+addEventListener("keydown", ()=>{ ensureAudio(); startMusic(); if(!worldLabel) worldize(); }, {once:true});
+
+/* ===== pretty post effects ===== */
+function vignette(){
+  const g=X.createRadialGradient(W/2,H/2, Math.min(W,H)*0.18, W/2,H/2, Math.max(W,H)*0.72);
+  g.addColorStop(0,"rgba(0,0,0,0)");
+  g.addColorStop(1,`rgba(0,0,0,${pretty.vignette})`);
+  X.fillStyle=g; X.fillRect(0,0,W,H);
+}
+function grain(){
+  const a=pretty.grain;
+  X.fillStyle=`rgba(255,255,255,${a})`;
+  for(let i=0;i<140;i++){
+    const x=(Math.random()*W)|0, y=(Math.random()*H)|0;
+    X.fillRect(x,y,1,1);
+  }
+}
+
+/* ===== MAIN LOOP ===== */
+function loop(){
+  requestAnimationFrame(loop);
+  t+=0.016;
+
+  // melt tween
+  melt = lerp(melt, meltTarget, 0.055);
+  const melting = melt > 0.02;
+
+  // movement
+  if(mode==="normal"){
+    const ax=(K.ArrowRight?1:0)-(K.ArrowLeft?1:0);
+    const ay=(K.ArrowDown?1:0)-(K.ArrowUp?1:0);
+    const boost=K.Shift?1:0;
+    const a=0.22*(1+0.9*boost);
+    orb.vx+=ax*a; orb.vy+=ay*a;
+    orb.vx*=0.985; orb.vy*=0.985;
+
+    const sp=Math.hypot(orb.vx,orb.vy);
+    if(!melting){
+      orb.panic += (sp<0.15 ? 0.08 : -0.12);
+      orb.panic=clamp(orb.panic,0,1);
+    } else orb.panic*=0.9;
+
+    orb.w += (ax*0.04 + Math.sin(t*2.7)*0.003) * (0.6+sp*0.12);
+    orb.w*=0.92; orb.ang+=orb.w;
+
+    orb.x+=orb.vx; orb.y+=orb.vy;
+    if(boost && (ax||ay||sp>0.2)) orb.scream = Math.min(1, orb.scream+0.12);
+    else orb.scream*=0.88;
+  } else {
+    orb.x+=orb.vx; orb.y+=orb.vy;
+    orb.vx*=0.995; orb.vy*=0.995;
+    orb.ang+=orb.w; orb.w*=0.98;
+    orb.panic*=0.97; orb.scream*=0.92;
+  }
+
+  // background: soft dusk
+  const breathe=0.5+0.5*Math.sin(t*0.6);
+  const bg=X.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,`rgb(${8+5*breathe|0},${10+7*breathe|0},${22+14*breathe|0})`);
+  bg.addColorStop(1,`rgb(${4+4*breathe|0},${5+5*breathe|0},${14+10*breathe|0})`);
+  X.fillStyle=bg; X.fillRect(0,0,W,H);
+
+  // stars: dimmer, softer
+  const sp=Math.hypot(orb.vx,orb.vy);
+  const warp=(mode==="explode"?shock:mode==="fuse"?(0.2+0.8*fuse):0);
+  for(const s of stars){
+    s.z-= (6+sp*1.6);
+    if(s.z<2){Object.assign(s,mkStar()); s.z=1200;}
+    const k=520/s.z;
+    const dx=(s.x-orb.x), dy=(s.y-orb.y);
+    const sw=warp*0.0011*(1+300/s.z);
+    const rx = dx*Math.cos(sw*dy) - dy*Math.sin(sw*dx);
+    const ry = dx*Math.sin(sw*dy) + dy*Math.cos(sw*dx);
+    const px=W/2+rx*k, py=H/2+ry*k;
+    if(px<-10||py<-10||px>W+10||py>H+10) continue;
+    const sz=Math.max(1,k*(1.1+sp*0.02));
+    const hue=(s.h*0.4 + 200 + warp*40)%360;
+    X.fillStyle=`hsla(${hue},55%,75%,${pretty.starAlpha*(0.18+0.62*k)})`;
+    X.fillRect(px,py,sz,sz);
+  }
+
+  // explode/fuse sim
+  const ox=W/2, oy=H/2;
+  if(mode==="explode"){
+    shock*=0.92;
+    for(const b of bits){ b.x+=b.vx; b.y+=b.vy; b.vx*=0.985; b.vy*=0.985; b.life*=0.992; }
+    for(const d of dust){
+      const rr=Math.hypot(d.x,d.y)||1, push=0.6+5*shock;
+      d.vx+=(d.x/rr)*push*(0.018+Math.random()*0.01);
+      d.vy+=(d.y/rr)*push*(0.018+Math.random()*0.01);
+      d.x+=d.vx; d.y+=d.vy; d.vx*=0.97; d.vy*=0.97; d.life*=0.994;
+    }
+    if(shock<0.04) startFuse();
+  }
+  if(mode==="fuse"){
+    fuse=clamp(fuse+0.012,0,1);
+    for(const b of bits){
+      const dx=-b.x, dy=-b.y, rr=Math.hypot(dx,dy)||1;
+      const pull=(0.16+1.6*fuse);
+      b.vx+=(dx/rr)*pull; b.vy+=(dy/rr)*pull;
+      b.x+=b.vx; b.y+=b.vy; b.vx*=0.84; b.vy*=0.84;
+      b.life=Math.min(1,b.life+0.01*fuse);
+    }
+    for(const d of dust){
+      const dx=-d.x, dy=-d.y, rr=Math.hypot(dx,dy)||1;
+      const pull=(0.07+1.2*fuse);
+      d.vx+=(dx/rr)*pull*(0.35+0.4*Math.random());
+      d.vy+=(dy/rr)*pull*(0.35+0.4*Math.random());
+      d.x+=d.vx; d.y+=d.vy; d.vx*=0.86; d.vy*=0.86; d.life*=0.992;
+    }
+    if(fuse>0.98){ mode="normal"; orb.alive=1; bits.length=0; dust.length=0; orb.panic=0; orb.scream=0.25; }
+  }
+
+  // draw explode/fuse (soft, not blinding)
+  if(mode!=="normal"){
+    const hueBase=(210 + (mode==="fuse"?fuse:1-shock)*40)%360;
+    const ring=(mode==="explode"?(1-shock):fuse);
+    X.save(); X.translate(ox,oy);
+    if(pretty.glow) X.globalCompositeOperation="screen";
+    X.strokeStyle=`hsla(${hueBase},55%,78%,${0.22*(mode==="explode"?shock:(1-fuse))})`;
+    X.lineWidth=1.5+5*(mode==="explode"?shock:(1-fuse));
+    X.beginPath(); X.arc(0,0,50+ring*240,0,Math.PI*2); X.stroke();
+
+    for(const d of dust){
+      const a=clamp(d.life,0,1);
+      X.fillStyle=`hsla(${hueBase+20},45%,82%,${0.035*a})`;
+      X.beginPath(); X.arc(d.x,d.y,0.9+Math.random()*1.6,0,Math.PI*2); X.fill();
+    }
+    for(const b of bits){
+      const a=clamp(b.life,0,1);
+      X.fillStyle=`hsla(${(b.h*0.35+hueBase)%360},55%,72%,${0.06+0.18*a})`;
+      X.beginPath(); X.arc(b.x,b.y,b.r*(1+0.4*(mode==="fuse"?fuse:0)),0,Math.PI*2); X.fill();
+    }
+    X.restore(); X.globalCompositeOperation="source-over";
+  }
+
+  // lava drips: slow + silky
+  if(melting || lava.length){
+    const g=0.05 + 0.08*melt;
+    for(let i=lava.length-1;i>=0;i--){
+      const p=lava[i];
+      p.vy += g*(0.7+Math.random()*0.3);
+      p.vx += Math.sin(t*2.4 + p.x*0.025)*0.02;
+      p.x += p.vx; p.y += p.vy;
+      p.vx *= 0.988; p.vy *= 0.994;
+      p.r *= 0.998;
+      p.life *= 0.992;
+      if(p.y>H*0.55 || p.life<0.05 || p.r<0.25) lava.splice(i,1);
+    }
+    if(meltTarget>0.5 && melt>0.35 && Math.random()<0.18) spawnLava(1);
+  }
+
+  // draw orb (normal vs melting)
+  if(mode==="normal" && orb.alive){
+    const R=26;
+    const squish=1+Math.min(0.2,sp*0.035), sx=squish, sy=1/squish;
+
+    const coolHue=(205 + sp*10)%360;
+    const inkHue = lavaHue();
+    const hue = (1-melt)*coolHue + melt*inkHue;
+
+    X.save(); X.translate(ox,oy); X.rotate(orb.ang*0.55);
+
+    if(melting){
+      // “ink bloom” blobs (screen blend but gentle)
+      if(pretty.glow) X.globalCompositeOperation="screen";
+      X.shadowColor=`hsla(${hue},55%,70%,0.45)`;
+      X.shadowBlur=10+18*melt;
+
+      const blobN = 6 + (melt*7|0);
+      const spread = 10 + 24*melt;
+      for(let i=0;i<blobN;i++){
+        const a=i*(Math.PI*2/blobN) + Math.sin(t*1.2+i)*0.6*melt;
+        const rr = R*(0.55 + 0.35*Math.sin(t*1.6+i)*melt) * (0.65+0.4*Math.random());
+        const bx = Math.cos(a)*spread*(0.35+Math.random()*0.65);
+        const by = Math.sin(a)*spread*(0.25+Math.random()*0.75) + (melt*14*Math.random());
+        const g = X.createRadialGradient(bx-4,by-6,2,bx,by,rr*2.4);
+        g.addColorStop(0,`hsla(${(hue+8)%360},45%,92%,0.55)`);
+        g.addColorStop(0.45,`hsla(${(hue+2)%360},55%,70%,0.35)`);
+        g.addColorStop(1,`hsla(${(hue-6)%360},55%,50%,0)`);
+        X.fillStyle=g;
+        X.beginPath(); X.arc(bx,by,rr*2.4,0,Math.PI*2); X.fill();
+      }
+
+      // core
+      X.globalCompositeOperation="source-over";
+      const core = X.createRadialGradient(-6,-8,2,0,0,R*(1.35+0.5*melt));
+      core.addColorStop(0,"rgba(255,255,255,0.92)");
+      core.addColorStop(0.4,`hsla(${hue},60%,68%,0.85)`);
+      core.addColorStop(1,`hsla(${(hue-8)%360},55%,45%,0.9)`);
+      X.fillStyle=core;
+      X.beginPath(); X.ellipse(0, 5*melt, R*(1+0.35*melt), R*(1-0.25*melt), 0, 0, Math.PI*2); X.fill();
+
+      // face dissolves softly
+      if(showFace && melt<0.55){
+        const fade=(1 - melt/0.55);
+        const blink=(Math.sin(t*10)>0.6)?0.2:1;
+        X.fillStyle=`rgba(10,12,18,${0.45*fade})`;
+        X.beginPath(); X.ellipse(-8,-4,4,6*blink,0,0,Math.PI*2); X.fill();
+        X.beginPath(); X.ellipse( 8,-4,4,6*blink,0,0,Math.PI*2); X.fill();
+        X.strokeStyle=`rgba(10,12,18,${0.35*fade})`; X.lineWidth=2;
+        X.beginPath(); X.arc(0,6,6,0,Math.PI,false); X.stroke();
+      }
+
+    } else {
+      // normal orb: toned glow
+      X.scale(sx,sy);
+
+      if(pretty.glow){
+        X.globalCompositeOperation="screen";
+        const aura=X.createRadialGradient(-6,-6,6,0,0,R*2.5);
+        aura.addColorStop(0,`hsla(${hue},55%,92%,0.35)`);
+        aura.addColorStop(0.35,`hsla(${hue},55%,74%,0.22)`);
+        aura.addColorStop(1,`hsla(${hue},55%,55%,0)`);
+        X.fillStyle=aura; X.beginPath(); X.arc(0,0,R*2.5,0,Math.PI*2); X.fill();
+        X.globalCompositeOperation="source-over";
+      }
+
+      const core=X.createRadialGradient(-8,-10,2,0,0,R*1.2);
+      core.addColorStop(0,"rgba(255,255,255,0.98)");
+      core.addColorStop(0.5,`hsla(${hue},55%,72%,0.95)`);
+      core.addColorStop(1,`hsla(${hue},50%,50%,1)`);
+      X.fillStyle=core; X.beginPath(); X.arc(0,0,R,0,Math.PI*2); X.fill();
+
+      if(showFace){
+        const blink=(orb.panic>0.65 && (Math.sin(t*18)>0.6))?0.15:1;
+        X.fillStyle="rgba(10,12,18,0.55)";
+        X.beginPath(); X.ellipse(-8,-4,4,6*blink,0,0,Math.PI*2); X.fill();
+        X.beginPath(); X.ellipse( 8,-4,4,6*blink,0,0,Math.PI*2); X.fill();
+        X.strokeStyle="rgba(10,12,18,0.4)"; X.lineWidth=2;
+        X.beginPath(); X.arc(0,6,6,0,Math.PI,false); X.stroke();
+      }
+    }
+    X.restore();
+  }
+
+  // draw lava drips (gentle)
+  if(lava.length){
+    X.save(); X.translate(ox,oy);
+    if(pretty.glow) X.globalCompositeOperation="screen";
+    for(const p of lava){
+      const a=clamp(p.life,0,1)*0.65;
+      const g=X.createRadialGradient(p.x-3,p.y-5,2,p.x,p.y,p.r*3.4);
+      g.addColorStop(0,`hsla(${p.h},45%,92%,${0.35*a})`);
+      g.addColorStop(0.5,`hsla(${(p.h+6)%360},55%,68%,${0.22*a})`);
+      g.addColorStop(1,`hsla(${(p.h-10)%360},55%,52%,0)`);
+      X.fillStyle=g;
+      X.beginPath(); X.arc(p.x,p.y,p.r*3.4,0,Math.PI*2); X.fill();
+    }
+    X.restore(); X.globalCompositeOperation="source-over";
+  }
+
+  // post effects
+  vignette();
+  grain();
+
+  // HUD
+  X.fillStyle="rgba(255,255,255,0.6)";
+  X.font="12px system-ui,Segoe UI,Arial";
+  X.fillText("Arrows steer • Shift BOOST • Space EXPLODE/FUSE • R NEW MUSIC WORLD • M MUTE+MELT • F face • G glow",12,H-28);
+  X.fillStyle="rgba(255,255,255,0.4)";
+  X.fillText(worldLabel || "Click / press any key to start audio. Then press R to roll a new world.",12,H-12);
+}
+loop();
+</script>

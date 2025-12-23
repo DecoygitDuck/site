@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>rjo-dev://apps</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="terminalSite">
+<div class="scanlines"></div>
+<div class="noise"></div>
+<div class="vignette"></div>
+<div class="wrap">
+  <header class="panel topbar">
+    <div class="brand">
+      <div class="title">rjo-dev<span>://</span>lab</div>
+      <div class="sub">terminal mode · app previews are “characters” only · launch disabled (preview)</div>
+    </div>
+    <nav class="nav" aria-label="site navigation">
+      <a href="#apps">APPS</a>
+      <a href="#about">ABOUT</a>
+      <a href="#contact">CONTACT</a>
+    </nav>
+  </header>
+  <main>
+    <section class="panel hero" id="top">
+      <div class="siteSphere" aria-hidden="true"></div>
+      <div class="cmd">
+        <div class="cmdline">
+          <span class="prompt">C:\rjo-dev&gt;</span>
+          <span id="typedCmd">run portfolio</span><span class="blink" aria-hidden="true"></span>
+        </div>
+        <p>
+          Minimal. Playable. Weird in a good way.
+          Each tile below shows a tiny “main character” preview (just motion + vibe) —
+          launch the full app when you’re ready (wiring disabled for now).
+        </p>
+        <div class="actions">
+          <button class="btn primary" onclick="document.getElementById('apps').scrollIntoView({behavior:'smooth'})">LIST APPS</button>
+          
+        </div>
+      </div>
+    </section>
+    <section class="panel term" id="terminal" aria-label="terminal">
+      <div class="termHeader">
+        <div class="left">
+          <span class="dot" aria-hidden="true"></span>
+          <span><span class="prompt">session:</span> rjo-dev shell</span>
+          <span class="kbd">↑</span><span class="kbd">↓</span> history
+          <span class="kbd">tab</span> autocomplete
+        </div>
+        <div class="right">
+          <button class="chip" type="button" onclick="termRun('help')">help</button>
+          <button class="chip" type="button" onclick="termRun('list')">list</button>
+          <button class="chip" type="button" onclick="termRun('clear')">clear</button>
+          <button class="chip" type="button" onclick="termRun('theme green')">green</button>
+          <button class="chip" type="button" onclick="termRun('theme blue')">blue</button>
+          <button class="chip" type="button" onclick="termRun('theme amber')">amber</button>
+          <button class="chip" type="button" onclick="termRun('theme boring')">boring</button>
+        </div>
+      </div>
+      <div class="termOut" id="termOut" role="log" aria-live="polite" aria-label="terminal output"></div>
+      <div class="termIn">
+        <span class="p">C:\rjo-dev&gt;</span>
+        <input id="termInput" class="termInput" inputmode="text" autocomplete="off" spellcheck="false"
+               placeholder="try: list   |   open notecenter   |   open orby   |   about" />
+      </div>
+      <div class="termHint">
+        Pro tip: type <span class="kbd">theme boring</span> for sleek mode, or <span class="kbd">theme green</span> to come back.
+      </div>
+    </section>
+    <div class="sectionTitle" id="apps">
+      <h2>Featured apps</h2>
+      <div class="hint">click <span class="kbd">DEMO</span> to try the mini version</div>
+    </div>
+    <section class="grid">
+      <!-- ORBY -->
+      <article class="card" data-app="orby">
+        <div class="cardTop">
+          <h3>ORBY</h3>
+          <div class="tag">LIVE</div>
+        </div>
+        <div class="desc">The sphere. The field. The pulse. This preview is only the core orb (no UI).</div>
+        <div class="preview" aria-label="Orby preview">
+          <div class="miniSphere" aria-hidden="true"></div>
+        </div>
+        <div class="cardActions">
+          <a class="link primary" href="#terminal" onclick="termRun('open orby'); return false;">OPEN</a>
+          <button class="link demoBtn" type="button" data-demo="orby">DEMO</button>
+        </div>
+      </article>
+      <!-- CUBE -->
+      <article class="card" data-app="cube">
+        <div class="cardTop">
+          <h3>CUBE</h3>
+          <div class="tag">BETA</div>
+        </div>
+        <div class="desc">Memory + focus as geometry. Preview shows the cube only.</div>
+        <div class="preview" aria-label="Cube preview">
+          <div class="miniCubeScene" aria-hidden="true">
+            <div class="miniCube">
+              <div class="f f1"></div><div class="f f2"></div><div class="f f3"></div>
+              <div class="f f4"></div><div class="f f5"></div><div class="f f6"></div>
+            </div>
+          </div>
+        </div>
+        <div class="cardActions">
+          <a class="link primary" href="#terminal" onclick="termRun('open cube'); return false;">OPEN</a>
+          <button class="link demoBtn" type="button" data-demo="cube">DEMO</button>
+        </div>
+      </article>
+<!-- NOTECENTER -->
+<article class="card" data-app="notecenter">
+  <div class="cardTop">
+    <h3>NOTECENTER</h3>
+    <div class="tag">LIVE</div>
+  </div>
+  <div class="desc">Sticky notes + a real terminal sidebar. Preview shows the notes (left) + terminal (right).</div>
+  <div class="preview" aria-label="NoteCenter preview">
+    <div class="ncPreview" aria-hidden="true">
+      <div class="ncNotes">
+        <div class="noteDot n1"></div>
+        <div class="noteDot n2"></div>
+        <div class="noteDot n3"></div>
+        <div class="noteDot n4"></div>
+      </div>
+      <div class="ncTermMini">
+        <div class="h">terminal</div>
+        <div class="l"><span style="color:rgba(92,255,198,.92); font-weight:900;">nc&gt;</span> new note</div>
+        <div class="l"><span style="color:rgba(92,255,198,.92); font-weight:900;">nc&gt;</span> pin “ideas”</div>
+        <div class="l"><span style="color:rgba(92,255,198,.92); font-weight:900;">nc&gt;</span> export<span class="ncCaret"></span></div>
+      </div>
+    </div>
+  </div>
+  <div class="cardActions">
+          <a class="link primary" href="#terminal" onclick="termRun('open notecenter'); return false;">OPEN</a>
+          <button class="link demoBtn" type="button" data-demo="ncos">DEMO</button>
+        </div>
+      </article>
+<!-- WORDBEAT -->
+      <article class="card" data-app="wordbeat">
+        <div class="cardTop">
+          <h3>WORDBEAT</h3>
+          <div class="tag">LIVE</div>
+        </div>
+        <div class="desc">Text becomes rhythm. Preview types “wordbeat” into the field.</div>
+        <div class="preview" aria-label="Wordbeat preview">
+          <div class="typeWrap" aria-hidden="true">
+            <div class="typeHdr">INPUT</div>
+            <div class="fakeInput">
+              <div class="typed" id="wbTyped"></div>
+              <div class="caret"></div>
+            </div>
+          </div>
+        </div>
+        <div class="cardActions">
+          <a class="link primary" href="#terminal" onclick="termRun('open wordbeat'); return false;">OPEN</a>
+          <a class="link" href="#terminal" onclick="termRun('demo wordbeat'); return false;">DEMO</a>
+        </div>
+      </article>
+      <!-- HOPHOP -->
+      <article class="card" data-app="hophop">
+        <div class="cardTop">
+          <h3>HOPHOP</h3>
+          <div class="tag">PROTO</div>
+        </div>
+        <div class="desc">A tiny runner on a platform. Preview shows the lil character hopping.</div>
+        <div class="preview" aria-label="HopHop preview">
+          <div class="hopWorld" aria-hidden="true">
+            <div class="platform"></div>
+            <div class="hopper"></div>
+          </div>
+        </div>
+        <div class="cardActions">
+          <a class="link primary" href="#terminal" onclick="termRun('open hophop'); return false;">OPEN</a>
+          <a class="link" href="#terminal" onclick="termRun('demo hophop'); return false;">DEMO</a>
+        </div>
+      </article>
+    </section>
+    <section class="panel" id="about" style="margin-top:14px; padding:16px 16px 14px;">
+      <div class="sectionTitle" style="margin:0 0 8px;">
+        <h2>About</h2>
+      </div>
+      <div style="color:var(--muted); font-size:12px; line-height:1.65;">        <span class="prompt">C:\rjo-dev&gt;</span> built in <span class="kbd">HTML</span>, <span class="kbd">CSS</span>, and <span class="kbd">vanilla JS</span> — no frameworks, just clean structure + intentional styling.
+        I focus on fast previews—clean tiles, small character animations—and ship full apps on dedicated pages.</div>
+    </section>
+    <footer class="panel footer" id="contact">
+      <div><span class="prompt">status:</span> online · <span style="color:rgba(92,255,198,.9); font-weight:900;">ready</span></div>
+      <div><span class="prompt">hint:</span> press <span class="kbd">/</span> for help (coming)</div>
+    </footer>
+  </main>
+</div>
+</div>
+<div id="boringSite" aria-hidden="true">
+  <header class="bHeader">
+    <div class="bWrap bNav">
+      <div class="bBrand">
+        <div class="bLogo">RJO</div>
+        <div>
+          <div class="bTitle">rjo-dev</div>
+          <div class="bSub">apps • web • systems</div>
+        </div>
+      </div>
+      <nav class="bLinks" aria-label="Primary">
+        <a href="#bProjects">Projects</a>
+        <a href="#bServices">Services</a>
+        <a href="#bAbout">About</a>
+        <a href="#bContact">Contact</a>
+      </nav>
+      <div class="bCtas">
+        <button class="bBtn bGhost" data-bcmd="theme green">Terminal mode</button>
+        <button class="bBtn" data-bcmd="open contact">Hire me</button>
+      </div>
+    </div>
+  </header>
+  <main class="bMain">
+    <section class="bHero">
+      <div class="bWrap bHeroGrid">
+        <div class="bHeroCopy">
+          <div class="bBadge">Independent builder</div>
+          <h1>Shipping apps with taste, speed, and structure.</h1>
+          <p>
+            
+            Clean on the outside, playful under the hood. Curated projects, fast previews, and solid engineering.
+          
+          </p>
+          <div class="bHeroActions">
+            <a class="bBtn" href="#bProjects">View projects</a>
+            <button class="bBtn bGhost" data-bcmd="theme blue">Alt terminal theme</button>
+          </div>
+          <div class="bStats">
+            <div class="bStat"><div class="k">Focus</div><div class="v">UX + Logic</div></div>
+            <div class="bStat"><div class="k">Stack</div><div class="v">Web + Desktop</div></div>
+            <div class="bStat"><div class="k">Status</div><div class="v">Open to work</div></div>
+          </div>
+        </div>
+        <!-- Hero Computer Illustration with Typing Animation -->
+        <div class="bHeroIllustration" role="img" aria-label="Animated computer illustration">
+          <svg class="heroComputer" viewBox="0 0 320 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Monitor -->
+            <rect class="monitor-body" x="40" y="20" width="240" height="150" rx="12" fill="#1e293b" stroke="#334155" stroke-width="2"/>
+            <rect class="monitor-screen" x="52" y="32" width="216" height="120" rx="6" fill="#0f172a"/>
+            <!-- Screen content - code lines -->
+            <g class="screen-content">
+              <rect x="64" y="48" width="80" height="6" rx="2" fill="#3b82f6" opacity="0.7"/>
+              <rect x="150" y="48" width="40" height="6" rx="2" fill="#10b981" opacity="0.6"/>
+              <rect x="64" y="62" width="60" height="6" rx="2" fill="#6366f1" opacity="0.5"/>
+              <rect x="130" y="62" width="90" height="6" rx="2" fill="#64748b" opacity="0.4"/>
+              <rect x="64" y="76" width="100" height="6" rx="2" fill="#8b5cf6" opacity="0.6"/>
+              <rect x="64" y="90" width="45" height="6" rx="2" fill="#f59e0b" opacity="0.5"/>
+              <rect x="115" y="90" width="70" height="6" rx="2" fill="#3b82f6" opacity="0.6"/>
+              <rect x="64" y="104" width="120" height="6" rx="2" fill="#10b981" opacity="0.5"/>
+              <rect x="64" y="118" width="55" height="6" rx="2" fill="#ec4899" opacity="0.6"/>
+              <rect x="125" y="118" width="80" height="6" rx="2" fill="#64748b" opacity="0.4"/>
+              <!-- Typing cursor -->
+              <rect class="screen-cursor" x="210" y="118" width="8" height="12" rx="1" fill="#3b82f6"/>
+            </g>
+            <!-- Monitor stand -->
+            <path d="M140 170 L180 170 L190 190 L130 190 Z" fill="#334155"/>
+            <rect x="120" y="190" width="80" height="8" rx="4" fill="#475569"/>
+            <!-- Keyboard -->
+            <rect class="keyboard-body" x="60" y="210" width="200" height="45" rx="8" fill="#1e293b" stroke="#334155" stroke-width="2"/>
+            <!-- Keyboard keys - row 1 -->
+            <g class="keyboard-keys">
+              <rect class="key" data-key="0" x="72" y="218" width="16" height="12" rx="2" fill="#334155"/>
+              <rect class="key" data-key="1" x="92" y="218" width="16" height="12" rx="2" fill="#334155"/>
+              <rect class="key" data-key="2" x="112" y="218" width="16" height="12" rx="2" fill="#334155"/>
+              <rect class="key" data-key="3" x="132" y="218" width="16" height="12" rx="2" fill="#334155"/>
+              <rect class="key" data-key="4" x="152" y="218" width="16" height="12" rx="2" fill="#334155"/>
+              <rect class="key" data-key="5" x="172" y="218" width="16" height="12" rx="2" fill="#334155"/>
+              <rect class="key" data-key="6" x="192" y="218" width="16" height="12" rx="2" fill="#334155"/>
+              <rect class="key" data-key="7" x="212" y="218" width="16" height="12" rx="2" fill="#334155"/>
+              <rect class="key" data-key="8" x="232" y="218" width="16" height="12" rx="2" fill="#334155"/>
+              <!-- Keyboard keys - row 2 -->
+              <rect class="key" data-key="9" x="78" y="233" width="16" height="12" rx="2" fill="#334155"/>
+              <rect class="key" data-key="10" x="98" y="233" width="16" height="12" rx="2" fill="#334155"/>
+              <rect class="key" data-key="11" x="118" y="233" width="16" height="12" rx="2" fill="#334155"/>
+              <rect class="key" data-key="12" x="138" y="233" width="16" height="12" rx="2" fill="#334155"/>
+              <rect class="key" data-key="13" x="158" y="233" width="16" height="12" rx="2" fill="#334155"/>
+              <rect class="key" data-key="14" x="178" y="233" width="16" height="12" rx="2" fill="#334155"/>
+              <rect class="key" data-key="15" x="198" y="233" width="16" height="12" rx="2" fill="#334155"/>
+              <rect class="key" data-key="16" x="218" y="233" width="28" height="12" rx="2" fill="#334155"/>
+            </g>
+            <!-- Ambient glow -->
+            <ellipse class="monitor-glow" cx="160" cy="95" rx="100" ry="60" fill="url(#screenGlow)" opacity="0.15"/>
+            <defs>
+              <radialGradient id="screenGlow" cx="0.5" cy="0.5" r="0.5">
+                <stop offset="0%" stop-color="#3b82f6"/>
+                <stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+          </svg>
+          <div class="bDemoWrap" aria-hidden="true">
+            <div class="bDemoBackdrop" data-demo-close></div>
+            <div class="bDemoScreen" role="dialog" aria-label="App demo">
+              <div class="bDemoTop">
+                <div class="bDemoTitle" id="bDemoTitle">Demo</div>
+                <div class="bDemoBtns">
+                  <button class="bDemoBtn" type="button" id="bDemoMute" aria-label="Mute/unmute">Mute</button>
+                  <button class="bDemoBtn" type="button" data-demo-close aria-label="Close demo">Close</button>
+                </div>
+              </div>
+              <div class="bDemoViewport" id="bDemoViewport"></div>
+              <div class="bDemoHint" id="bDemoHint">Audio may require a click/tap to start.</div>
+            </div>
+          </div>
+
+          <!-- Floating particles -->
+          <div class="hero-particles" aria-hidden="true">
+            <span class="particle p1"></span>
+            <span class="particle p2"></span>
+            <span class="particle p3"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section id="bProjects" class="bSection">
+      <div class="bWrap">
+        <div class="bSectionTop">
+          <h2>Projects</h2>
+        </div>
+        <div id="boringProjectsGrid" class="bGrid" aria-label="Project cards"></div>
+      </div>
+    </section>
+    <section class="bSection bAlt" id="bServices">
+      <div class="bWrap">
+        <div class="bSectionTop">
+          <h2>What I build</h2>
+          <p>Client-ready delivery with clean UX, clear scope, and real implementation.</p>
+        </div>
+        <div class="bFeatGrid" aria-label="Services">
+          <div class="bFeat">
+            <h3>Web apps</h3>
+            <p>Fast, responsive interfaces with solid state, storage, and performance. Built for real users.</p>
+          </div>
+          <div class="bFeat">
+            <h3>Desktop apps</h3>
+            <p>Offline-first tools and packaged experiences (Tauri-style workflows), designed to feel premium.</p>
+          </div>
+          <div class="bFeat">
+            <h3>Product polish</h3>
+            <p>UI/UX refinements, information architecture, and “make it feel finished” passes that matter.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="bSection" id="bProcess">
+      <div class="bWrap bTwo">
+        <div>
+          <h2>How we ship</h2>
+          <p style="color: rgba(15,23,42,.70); line-height:1.6; margin:0 0 14px;">
+            I keep the process simple: clarity first, then fast iterations, then a clean handoff.
+          </p>
+          <div class="bFeat" style="box-shadow:none;">
+            <div style="display:grid; gap:10px;">
+              <div><strong>1) Scope</strong><div style="color: rgba(15,23,42,.70);">You tell me the goal. I translate it into a tight build plan.</div></div>
+              <div><strong>2) Build</strong><div style="color: rgba(15,23,42,.70);">I implement in focused slices so you can review early.</div></div>
+              <div><strong>3) Polish</strong><div style="color: rgba(15,23,42,.70);">Typography, spacing, motion, accessibility, and final QA.</div></div>
+              <div><strong>4) Deliver</strong><div style="color: rgba(15,23,42,.70);">A clean, shareable bundle with simple next steps.</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section id="bAbout" class="bSection bAlt">
+      <div class="bWrap bTwo">
+        <div>
+          <h2>About</h2>
+          <p>
+            
+            I build playful products with serious engineering—clean UX, strong structure, and shipped work.
+          
+          </p>
+        </div>
+        <div style="padding:14px 16px; border:1px solid rgba(15,23,42,.10); border-radius:14px; background: rgba(255,255,255,.65);">
+          <div style="font-weight:800; margin-bottom:6px;">Prefer terminal mode?</div>
+          <div style="color: rgba(15,23,42,.70); line-height:1.55;">Tap <strong>Terminal mode</strong> in the header (or type <strong>theme green</strong>).</div>
+        </div>
+      </div>
+    </section>
+    <section id="bContact" class="bSection">
+      <div class="bWrap bTwo">
+        <div>
+          <h2>Contact</h2>
+          <p style="color: rgba(15,23,42,.70); line-height:1.6; margin:0 0 14px;">
+            Tell me what you want built. I’ll reply with scope, milestones, and a clean plan.
+          </p>
+          <div class="bCallout" style="box-shadow:none;">
+            <div class="bCalloutTitle">Quick email</div>
+            <div class="bCalloutText">Use the form to generate a message, then send it in your email client.</div>
+            <form class="bForm" id="bContactForm">
+              <div class="bField">
+                <div class="bLabel">Your name</div>
+                <input class="bInput" id="bName" placeholder="Jane Doe" />
+              </div>
+              <div class="bField">
+                <div class="bLabel">Email</div>
+                <input class="bInput" id="bEmail" placeholder="jane@email.com" />
+              </div>
+              <div class="bField">
+                <div class="bLabel">What are we building?</div>
+                <textarea class="bTextarea" id="bMsg" placeholder="A portfolio site, a desktop app, a web tool..."></textarea>
+              </div>
+              <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button class="bBtn" type="button" id="bMailto">Generate email</button>
+                <button class="bBtn bGhost" type="button" id="bCopy">Copy message</button>
+              </div>
+              <div style="color: rgba(15,23,42,.62); font-weight:650; font-size: 13px;">
+                Tip: you can still type commands in terminal mode (theme green).
+              </div>
+            </form>
+          </div>
+        </div>
+        <div class="bContactCard">
+          <div class="bContactTitle">Quick actions</div>
+          <div class="bQuick">
+            <button class="bQuickBtn" data-bcmd="theme boring">Modern mode</button>
+            <button class="bQuickBtn" data-bcmd="theme amber">Amber terminal</button>
+            <button class="bQuickBtn" data-bcmd="theme blue">Blue terminal</button>
+            <button class="bQuickBtn" data-bcmd="clear">Clear terminal</button>
+          </div>
+          <div class="bDivider"></div>
+          <div style="font-weight:900; margin-bottom:8px;">Availability</div>
+          <div style="color: rgba(15,23,42,.70); line-height:1.55;">
+            Open to contract or full-time. Best fit: product UI + interactive web apps.
+          </div>
+        </div>
+      </div>
+    </section>
+    <div class="bToast" id="bToast" role="status" aria-live="polite">Copied</div>
+    <footer class="bFooter">
+      <div class="bWrap bFoot">
+        <div>© <span id="bYear"></span> rjo-dev</div>
+        <div class="bFootLinks">
+          <a href="#bProjects">Projects</a>
+          <a href="#bAbout">About</a>
+          <a href="#bContact">Contact</a>
+        </div>
+      </div>
+    </footer>
+  </main>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
